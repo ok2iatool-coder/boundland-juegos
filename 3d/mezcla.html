@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Boundland · mezcla de sonido</title>
+<style>body { margin: 2em; background: #1d1f19; color: #e9e3d2; font: 14px/1.6 system-ui, sans-serif; } pre { white-space: pre-wrap; }</style>
+</head>
+<body>
+<h1>Mezcla de sonido</h1>
+<p>Renderiza 24 s del sonido del bosque con el MISMO motor del juego (<code>js/sonido.js</code>) en un
+OfflineAudioContext, con un 18 simulado que anda y corre por cada suelo, y guarda el WAV en <code>.snaps/</code>
+(<code>mezcla.jpg</code>, que es un WAV: el servidor solo sabe guardar con esa extension). Asi se mide la mezcla sin
+altavoces y con el panel oculto. <code>tools/medir_mezcla.py</code> la analiza.</p>
+<pre id="log">renderizando…</pre>
+<script type="module">
+import { crearSonido } from './js/sonido.js';
+
+const SR = 44100, DUR = 24, DT = 1 / 60;
+// el guion: [desde, hasta, suelo, velocidad]
+const GUION = [
+  [0.5, 5, 'hierba', 0.45], [5, 10, 'hierba', 1.8], [10, 14, 'tierra', 1.8], [14, 17, 'piedra', 0.45],
+  [17, 19.5, 'agua', 1.8], [19.5, 21, 'tierra', 1.8],
+];
+const SALTO = 21.6;
+const tramo = (t) => GUION.find(([a, b]) => t >= a && t < b);
+
+const ctx = new OfflineAudioContext(2, SR * DUR, SR);
+const S = crearSonido('sonidos/', { ctx });
+await S.activar();
+
+let t = 0, fase = 0, mojada = 0;
+const heroe = {
+  listo: true, suelo: true, pos: { x: 0, y: 0, z: 0 }, vel: { x: 0, z: 0 }, caida: { n: 0, x: 0, z: 0, v: 3 },
+  contactos(out) {
+    out.length = 0;
+    const tr = tramo(t);
+    const ciclo = tr ? (tr[3] > 1 ? 0.62 : 1.1) : 1;          // un paso cada media vuelta del ciclo
+    const pl = (fase % 1), pr = ((fase + 0.5) % 1);
+    out.push({ id: 'foot_l', x: -0.05, z: 0, pisa: pl < 0.4 ? 1 : 0 });
+    out.push({ id: 'foot_r', x: 0.05, z: 0, pisa: pr < 0.4 ? 1 : 0 });
+    return out;
+  },
+};
+const mundo = {
+  superficie: () => (tramo(t) || [0, 0, 'hierba'])[2],
+  huellas: { get botaMojada() { return mojada; } },
+};
+const cam = { matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1.2, 3.5, 1] } };
+const marcas = [];
+for (let k = 1; k * DT < DUR - 0.1; k++) {
+  const tk = k * DT;
+  ctx.suspend(tk).then(() => {
+    t = tk;
+    const tr = tramo(t);
+    heroe.vel.x = tr ? tr[3] : 0;
+    if (tr) fase += DT / (tr[3] > 1 ? 0.62 : 1.1);
+    if (tr && tr[2] === 'agua') mojada = 1; else mojada = Math.max(0, mojada - DT * 0.35);
+    if (Math.abs(t - SALTO) < DT / 2) { heroe.caida.n++; marcas.push(['salto', t]); }
+    S.paso(DT, heroe, mundo, cam);
+    ctx.resume();
+  });
+}
+const r = await ctx.startRendering();
+// WAV de 16 bits
+const n = r.length, L = r.getChannelData(0), R = r.getChannelData(1);
+const b = new DataView(new ArrayBuffer(44 + n * 4));
+const txt = (o, s) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+txt(0, 'RIFF'); b.setUint32(4, 36 + n * 4, true); txt(8, 'WAVE'); txt(12, 'fmt ');
+b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 2, true); b.setUint32(24, SR, true);
+b.setUint32(28, SR * 4, true); b.setUint16(32, 4, true); b.setUint16(34, 16, true); txt(36, 'data'); b.setUint32(40, n * 4, true);
+for (let i = 0; i < n; i++) {
+  b.setInt16(44 + i * 4, Math.max(-1, Math.min(1, L[i])) * 32767, true);
+  b.setInt16(46 + i * 4, Math.max(-1, Math.min(1, R[i])) * 32767, true);
+}
+await fetch('/__snap/mezcla', { method: 'PUT', body: b.buffer });
+window.__mezcla = { cuenta: { ...S.cuenta }, marcas, guion: GUION };
+document.getElementById('log').textContent = 'hecho: ' + JSON.stringify(window.__mezcla);
+</script>
+</body>
+</html>

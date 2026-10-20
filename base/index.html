@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boundland · prueba 2.5D</title>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+<style>
+  :root { --tinta: #0b0a0c; --papel: #efe8da; --dim: rgba(239,232,218,.6); --linea: rgba(239,232,218,.18); }
+  html, body { margin: 0; height: 100%; background: #c9ccc8; overflow: hidden; font-family: Georgia, 'Times New Roman', serif; }
+  canvas { display: block; }
+  #panel { position: fixed; left: 16px; top: 16px; width: 330px; background: rgba(11,10,12,.72); color: var(--papel); padding: 14px 16px 12px; border: 1px solid var(--linea); }
+  #panel h1 { margin: 0 0 2px; font-size: 15px; font-weight: normal; letter-spacing: .14em; }
+  #panel p { margin: 0 0 10px; font-size: 12px; color: var(--dim); line-height: 1.45; }
+  .modo { display: block; width: 100%; text-align: left; background: none; color: var(--papel); border: 1px solid transparent; padding: 6px 8px; margin: 2px 0; font: inherit; font-size: 13px; cursor: pointer; }
+  .modo small { display: block; color: var(--dim); font-size: 11px; }
+  .modo:hover { border-color: var(--linea); }
+  .modo.activo { border-color: var(--papel); }
+  #teclas { margin-top: 10px; font-size: 11px; color: var(--dim); line-height: 1.6; }
+  #aviso { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); color: var(--papel); background: rgba(11,10,12,.7); padding: 6px 14px; font-size: 14px; letter-spacing: .06em; display: none; }
+  #lectura { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); background: #e6dcc6; color: #241f1a; padding: 18px 22px; border: 2px solid var(--tinta); box-shadow: 6px 6px 0 rgba(11,10,12,.35); display: none; }
+  #lectura b { display: block; font-weight: normal; letter-spacing: .12em; font-size: 13px; margin-bottom: 6px; color: #5b4a38; text-transform: uppercase; }
+  #lectura span { font-size: 16px; line-height: 1.5; }
+  #franjas::before, #franjas::after { content: ''; position: fixed; left: 0; right: 0; height: var(--f, 0px); background: var(--tinta); z-index: 5; transition: height .6s ease; }
+  #franjas::before { top: 0; } #franjas::after { bottom: 0; }
+  @media (max-width: 700px) { #panel { width: auto; right: 16px; } #teclas { display: none; } }
+</style>
+</head>
+<body>
+<div id="franjas"></div>
+<div id="panel">
+  <h1>BOUNDLAND · PRUEBA 2.5D</h1>
+  <p>La base de refugiados en 3D con el 18 de siempre (sus sprites). Cambia de cámara para comparar estilos.</p>
+  <button class="modo" data-modo="recorrido">T · Recorrido<small>Fuera en 2D; al cruzar el portón el mundo se abre en 3D</small></button>
+  <button class="modo" data-modo="plano">1 · Plano 2D<small>Como el juego ahora</small></button>
+  <button class="modo" data-modo="lateral">2 · Lateral con profundidad<small>Little Nightmares, INSIDE</small></button>
+  <button class="modo" data-modo="diorama">3 · Diorama<small>Octopath Traveler, Cult of the Lamb</small></button>
+  <button class="modo" data-modo="iso">4 · Isométrico<small>Hades, Death's Door</small></button>
+  <div id="teclas">WASD moverse · Mayús correr · E hablar / leer · Q y R girar la cámara (diorama)</div>
+</div>
+<div id="aviso"></div>
+<div id="lectura"><b></b><span></span></div>
+<script type="module" src="./main.js"></script>
+</body>
+</html>

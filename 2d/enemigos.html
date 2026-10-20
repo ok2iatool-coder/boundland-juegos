@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boundland · Enemigos</title>
+<style>
+  :root { --fondo: #0d1117; --tarjeta: #151b23; --linea: #2a323d; --texto: #e9e2d4; --suave: #8b93a0; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 14px Georgia, serif; }
+  header { padding: 24px 24px 6px; display: flex; flex-wrap: wrap; gap: 14px; align-items: baseline; }
+  h1 { margin: 0; font-weight: normal; letter-spacing: .3em; font-size: 24px; }
+  header p { margin: 0; color: var(--suave); }
+  .rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; padding: 12px 24px 24px; }
+  .tarjeta { background: var(--tarjeta); border: 1px solid var(--linea); }
+  canvas { display: block; width: 100%; height: auto; background: linear-gradient(#1b2028, #10141a); }
+  .pie { border-top: 1px solid var(--linea); padding: 8px 10px; color: var(--suave); font-size: 12px; }
+  .pie b { color: var(--texto); font-weight: normal; }
+</style>
+</head>
+<body>
+<header><h1>ENEMIGOS</h1><p>La hormiga entomórfica y el Escarabajo de la Bata en todos sus estados, a 3 aumentos, animados. Para revisar el dibujo sin jugar.</p></header>
+<div class="rejilla" id="rejilla"></div>
+<script type="module">
+import { dibujarEnemigo, dibujarJefe } from './dibujo/actores.js';
+
+// estado de prueba de cada tarjeta: [titulo, nota, que, estado, extra]
+const FICHAS = [
+  ['Hormiga', 'patrulla', 'hormiga', 'patrulla'],
+  ['Hormiga', 'corre', 'hormiga', 'corre'],
+  ['Hormiga', 'golpeada', 'hormiga', 'patrulla', { golpe: 0.1 }],
+  ['Hormiga', 'huye', 'hormiga', 'huye'],
+  ['Escarabajo de la Bata', 'espera', 'jefe', 'espera'],
+  ['Escarabajo de la Bata', 'anda', 'jefe', 'espera', { vx: 1 }],
+  ['Escarabajo de la Bata', 'tajo', 'jefe', 'tajo', { ciclo: 1.2 }],
+  ['Escarabajo de la Bata', 'carga', 'jefe', 'carga', { ciclo: 1.1 }],
+  ['Escarabajo de la Bata', 'cristales', 'jefe', 'cristales', { ciclo: 1.1 }],
+  ['Escarabajo de la Bata', 'vencido', 'jefe', 'vencido'],
+];
+const q = new URLSearchParams(location.search);
+const K = +(q.get('k') || 3);                       // ?k=8 para mirar de cerca
+const SOLO = q.get('solo');                         // ?solo=hormiga | jefe
+const rejilla = document.getElementById('rejilla');
+if (SOLO) rejilla.style.gridTemplateColumns = 'repeat(auto-fill, minmax(' + (SOLO === 'jefe' ? 220 : 120) * K / 2 + 'px, 1fr))';
+const tarjetas = FICHAS.filter((f) => !SOLO || f[2] === SOLO).map(([titulo, nota, que, estado, extra = {}]) => {
+  const d = document.createElement('div');
+  d.className = 'tarjeta';
+  const lienzo = document.createElement('canvas');
+  const ancho = que === 'jefe' ? 220 : 120, alto = que === 'jefe' ? 170 : 90;
+  lienzo.width = ancho * K; lienzo.height = alto * K;
+  d.append(lienzo);
+  const pie = document.createElement('div');
+  pie.className = 'pie';
+  pie.innerHTML = `<b>${titulo}</b> · ${nota}`;
+  d.append(pie);
+  rejilla.append(d);
+  return { lienzo, que, estado, extra, ancho, alto };
+});
+
+let t0 = performance.now();
+function cuadro(ms) {
+  const t = (ms - t0) / 1000;
+  for (const f of tarjetas) {
+    const c = f.lienzo.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, f.lienzo.width, f.lienzo.height);
+    c.setTransform(K, 0, 0, K, 0, 0);
+    // suelo
+    c.fillStyle = '#0c0f13'; c.fillRect(0, f.alto - 14, f.ancho, 14);
+    c.fillStyle = '#2a323d'; c.fillRect(0, f.alto - 14, f.ancho, 1);
+    const pie = f.alto - 14;
+    if (f.que === 'hormiga') {
+      const en = { tipo: 'hormiga', vivo: true, w: 28, h: 44, x: f.ancho / 2 - 14, y: pie - 44, cara: 1, estado: f.estado,
+        t: f.estado === 'huye' ? (t % 2.4) : t, x0: 3, golpe: f.extra.golpe && (t % 1) < 0.15 ? 0.1 : 0 };
+      dibujarEnemigo(c, en, t, K);
+    } else {
+      const ciclo = f.extra.ciclo || 0;
+      const j = { tipo: 'jefe', x: f.ancho / 2 - 42 - 20, y: pie - 96, w: 84, h: 96, cara: 1, estado: f.estado,
+        t: ciclo ? t % ciclo : t, vx: f.extra.vx || 0, golpe: 0, vuela: false };
+      dibujarJefe(c, j, t, K, { ondas: [], cristales: [] });
+    }
+  }
+  requestAnimationFrame(cuadro);
+}
+requestAnimationFrame(cuadro);
+// para fotos desde el panel: fija un instante
+window.__enemigos = { fijar(t) { t0 = performance.now() - t * 1000; } };
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+{
+ "paso_a": {
+  "w": 196,
+  "h": 99,
+  "cols": 6,
+  "cuadros": 30,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 160.0,
+  "anclaY": 99.0,
+  "techo": false
+ },
+ "paso_b": {
+  "w": 197,
+  "h": 99,
+  "cols": 6,
+  "cuadros": 30,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 160.0,
+  "anclaY": 99.0,
+  "techo": false
+ },
+ "paso_c": {
+  "w": 191,
+  "h": 60,
+  "cols": 6,
+  "cuadros": 30,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 160.0,
+  "anclaY": 60.0,
+  "techo": false
+ },
+ "aterriza": {
+  "w": 256,
+  "h": 52,
+  "cols": 6,
+  "cuadros": 30,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 128.0,
+  "anclaY": 52.0,
+  "techo": false
+ },
+ "derrape": {
+  "w": 247,
+  "h": 75,
+  "cols": 6,
+  "cuadros": 30,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 200.0,
+  "anclaY": 75.0,
+  "techo": false
+ },
+ "impacto": {
+  "w": 352,
+  "h": 142,
+  "cols": 6,
+  "cuadros": 36,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 176.0,
+  "anclaY": 142.0,
+  "techo": false
+ },
+ "arrastre": {
+  "w": 258,
+  "h": 53,
+  "cols": 6,
+  "cuadros": 36,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 152.0,
+  "anclaY": 53.0,
+  "techo": false
+ },
+ "derrumbe": {
+  "w": 416,
+  "h": 124,
+  "cols": 6,
+  "cuadros": 48,
+  "fps": 30,
+  "pxPorMetro": 80.0,
+  "anclaX": 208.0,
+  "anclaY": 124.0,
+  "techo": false
+ },
+ "cae_techo": {
+  "w": 54,
+  "h": 240,
+  "cols": 6,
+  "cuadros": 36,
+  "fps": 30,
+  "pxPorMetro": 160.0,
+  "anclaX": 28.0,
+  "anclaY": 0.0,
+  "techo": true
+ }
+}

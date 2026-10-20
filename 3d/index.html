@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Boundland · el bosque</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #a9aa8a; overflow: hidden; font: 13px/1.5 Bahnschrift, "Segoe UI", system-ui, sans-serif; color: #f2ecdc; }
+  #vista { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
+  #titulo { position: fixed; left: 18px; top: 14px; letter-spacing: .32em; font-size: 12px; text-shadow: 0 1px 6px rgba(0,0,0,.45); opacity: .9; }
+  #titulo b { display: block; font-size: 19px; letter-spacing: .18em; font-weight: 600; }
+  #ayuda { position: fixed; left: 18px; bottom: 16px; background: rgba(22,24,18,.55); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; padding: 8px 12px; line-height: 1.7; backdrop-filter: blur(3px); }
+  #ayuda.oculta { display: none; }
+  #ayuda kbd { display: inline-block; min-width: 16px; padding: 0 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,.35); border-radius: 4px; font: 11px/16px inherit; text-align: center; }
+  #carga { position: fixed; inset: 0; display: grid; place-items: center; background: #a9aa8a; color: #3d4232; letter-spacing: .3em; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="vista"></canvas>
+<div id="titulo">BOUNDLAND<b>EL BOSQUE</b></div>
+<div id="ayuda">
+  <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> correr &nbsp; <kbd>Mayús</kbd> andar &nbsp; <kbd>Espacio</kbd> saltar</div>
+  <div><kbd>1</kbd> saludar &nbsp; <kbd>2</kbd> mirar arriba &nbsp; <kbd>3</kbd> respingo &nbsp; <kbd>4</kbd> bajar la cabeza</div>
+  <div>ratón: girar la cámara (clic para fijarlo, <kbd>Esc</kbd> para soltar) · rueda: acercar · <kbd>H</kbd> ocultar</div>
+  <div><kbd>P</kbd> física de la capa: <span id="fisica">sí</span> &nbsp; <kbd>N</kbd> sonido</div>
+  <div style="opacity:.6;font-size:11px">sonidos: congusbongus (CC-BY 3.0, con swuing y EminYILDIRIM), Fantozzi, isaiah658 y Thimras (CC0) · <a href="sonidos/CREDITOS.txt" style="color:inherit">créditos</a></div>
+</div>
+<div id="carga">CARGANDO…</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+{
+ "px_por_metro": 336.3999999999999,
+ "anims": {
+  "andar": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 14,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    228,
+    392
+   ],
+   "pies": [
+    102.5,
+    363.0
+   ]
+  },
+  "salto": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 12,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    260,
+    406
+   ],
+   "pies": [
+    125.0,
+    365.5
+   ]
+  },
+  "aterriza": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 18,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    226,
+    394
+   ],
+   "pies": [
+    88.0,
+    354.5
+   ]
+  },
+  "reposo2": {
+   "fotogramas": 24,
+   "cols": 8,
+   "fps": 12,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    220,
+    382
+   ],
+   "pies": [
+    108.0,
+    364.5
+   ]
+  },
+  "correr": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 22,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    264,
+    394
+   ],
+   "pies": [
+    119.0,
+    366.0
+   ]
+  },
+  "arranque": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 20,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    269,
+    384
+   ],
+   "pies": [
+    111.0,
+    357.5
+   ]
+  },
+  "frenar": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 18,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    250,
+    391
+   ],
+   "pies": [
+    145.5,
+    357.0
+   ]
+  },
+  "despegue": {
+   "fotogramas": 2,
+   "cols": 2,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    249,
+    408
+   ],
+   "pies": [
+    110.5,
+    368.0
+   ]
+  },
+  "subir": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 10,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    234,
+    362
+   ],
+   "pies": [
+    137.0,
+    343.5
+   ]
+  },
+  "cumbre": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 14,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    217,
+    384
+   ],
+   "pies": [
+    97.0,
+    365.0
+   ]
+  },
+  "caer2": {
+   "fotogramas": 8,
+   "cols": 8,
+   "fps": 12,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    220,
+    378
+   ],
+   "pies": [
+    109.5,
+    360.0
+   ]
+  },
+  "aterriza_fuerte": {
+   "fotogramas": 5,
+   "cols": 5,
+   "fps": 16,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    252,
+    400
+   ],
+   "pies": [
+    93.0,
+    360.0
+   ]
+  },
+  "despertar": {
+   "fotogramas": 31,
+   "cols": 8,
+   "fps": 12,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    422,
+    418
+   ],
+   "pies": [
+    153.28,
+    381.0
+   ],
+   "origen": "intro 29-59 de boundland/web/img/sujeto (tools: hoja_despertar.py)"
+  }
+ }
+}

@@ -1,0 +1,117 @@
+{
+ "px_por_metro": 336.3999999999999,
+ "anims": {
+  "reposo2": {
+   "fotogramas": 24,
+   "cols": 8,
+   "fps": 12,
+   "bucle": true,
+   "fotograma": [
+    220,
+    382
+   ],
+   "pies": [
+    108.0,
+    364.5
+   ]
+  },
+  "andar": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 14,
+   "bucle": true,
+   "fotograma": [
+    228,
+    392
+   ],
+   "pies": [
+    102.5,
+    363.0
+   ]
+  },
+  "correr": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 22,
+   "bucle": true,
+   "fotograma": [
+    264,
+    394
+   ],
+   "pies": [
+    119.0,
+    366.0
+   ]
+  },
+  "frenar": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 18,
+   "bucle": false,
+   "fotograma": [
+    250,
+    391
+   ],
+   "pies": [
+    145.5,
+    357.0
+   ]
+  },
+  "alzar": {
+   "fotogramas": 8,
+   "cols": 8,
+   "fps": 10,
+   "bucle": false,
+   "fotograma": [
+    286,
+    372
+   ],
+   "pies": [
+    180.0,
+    356.0
+   ]
+  },
+  "mirar_arriba": {
+   "fotogramas": 16,
+   "cols": 8,
+   "fps": 7,
+   "bucle": true,
+   "fotograma": [
+    268,
+    308
+   ],
+   "pies": [
+    180.0,
+    290.0
+   ]
+  },
+  "respingo": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 14,
+   "bucle": false,
+   "fotograma": [
+    266,
+    309
+   ],
+   "pies": [
+    180.0,
+    287.0
+   ]
+  },
+  "bajar": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 9,
+   "bucle": false,
+   "fotograma": [
+    319,
+    396
+   ],
+   "pies": [
+    180.0,
+    376.0
+   ]
+  }
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "w": 512,
+ "h": 460,
+ "cuadros": 16,
+ "cols": 4,
+ "fps": 10,
+ "pxPorMetro": 102.4,
+ "tuboX": 256.0,
+ "tuboY": 15.36,
+ "tuboM": 1.12
+}

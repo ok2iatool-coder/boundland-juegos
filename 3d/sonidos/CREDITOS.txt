@@ -1,0 +1,11 @@
+Sonidos grabados (OpenGameArt), preparados con tools/sonidos.py:
+
+- Pasos en hierba y en agua: "Footsteps on different surfaces" de congusbongus (CC-BY 3.0),
+  https://opengameart.org/content/footsteps-on-different-surfaces
+  hierba: derivado de footstep-grass.wav de swuing (freesound 38874), CC-BY 3.0
+  agua: derivado de Water Footsteps de EminYILDIRIM (freesound 608663) y footstep-concrete.wav de swuing
+  (freesound 38873), CC-BY 3.0
+- Pasos en tierra (arena) y en piedra: "Fantozzi's Footsteps (Grass/Sand & Stone)" de Fantozzi (CC0),
+  https://opengameart.org/content/fantozzis-footsteps-grasssand-stone
+- Pajaros: "Ambient Bird Sounds" de isaiah658 (CC0), https://opengameart.org/content/ambient-bird-sounds
+- Viento: "Park ambiences" de Thimras (CC0), https://opengameart.org/content/park-ambiences

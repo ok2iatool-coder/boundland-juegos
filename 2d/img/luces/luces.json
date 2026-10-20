@@ -1,0 +1,58 @@
+{
+ "farol": {
+  "w": 512,
+  "h": 512,
+  "pxPorMetro": 80.0,
+  "anclaX": 256,
+  "anclaY": 256
+ },
+ "casa": {
+  "w": 512,
+  "h": 448,
+  "pxPorMetro": 80.0,
+  "anclaX": 256,
+  "anclaY": 26
+ },
+ "farola": {
+  "w": 512,
+  "h": 448,
+  "pxPorMetro": 85.33333333333333,
+  "anclaX": 256,
+  "anclaY": 24
+ },
+ "emergencia": {
+  "w": 512,
+  "h": 384,
+  "pxPorMetro": 91.42857142857143,
+  "anclaX": 256,
+  "anclaY": 18
+ },
+ "ventana": {
+  "w": 512,
+  "h": 512,
+  "pxPorMetro": 94.81481481481481,
+  "anclaX": 256,
+  "anclaY": 150
+ },
+ "rejilla": {
+  "w": 384,
+  "h": 384,
+  "pxPorMetro": 96.0,
+  "anclaX": 192,
+  "anclaY": 150
+ },
+ "frasco": {
+  "w": 448,
+  "h": 448,
+  "pxPorMetro": 89.6,
+  "anclaX": 224,
+  "anclaY": 224
+ },
+ "piloto": {
+  "w": 160,
+  "h": 160,
+  "pxPorMetro": 100.0,
+  "anclaX": 80,
+  "anclaY": 80
+ }
+}
