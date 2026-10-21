@@ -132,13 +132,98 @@ export const DIAG = new Uint8Array(N * N);
     }
   }
 }
-// la altura EXACTA de la cara pintada (pies, IK y tela pisan la faceta)
-export function altura(x, z) {
+// la cara de la rejilla GRUESA (8 m) en (x, z): la base de la fina
+function alturaLineal(x, z) {
   const gx = (x + EXT) / PASO, gz = (z + EXT) / PASO;
   if (gx < 0 || gz < 0 || gx > N || gz > N) return fuera(x, z);
   const i = Math.min(N - 1, Math.floor(gx)), j = Math.min(N - 1, Math.floor(gz)), fx = gx - i, fz = gz - j;
   const h00 = H[j * f + i], h10 = H[j * f + i + 1], h01 = H[(j + 1) * f + i], h11 = H[(j + 1) * f + i + 1];
   if (DIAG[j * N + i] === 0) return fx >= fz ? h00 + (h10 - h00) * fx + (h11 - h10) * fz : h00 + (h01 - h00) * fz + (h11 - h01) * fx;
+  return fx + fz <= 1 ? h00 + (h10 - h00) * fx + (h01 - h00) * fz : h11 + (h01 - h11) * (1 - fx) + (h10 - h11) * (1 - fz);
+}
+// ---------------- LA REJILLA FINA (2026-10-21: "todo el mapa con mas poligonos; mejora los poligonos de las montanas") ----------------
+// Las caras de 8 m dejaban los montes en facetas enormes con franjas de color de lado a lado. Ahora el suelo se pinta
+// sobre una rejilla de 2 m (SUB por celda) cuya cota en cada vertice (`alturaVertice`) es:
+//   - la cara gruesa, y en las CUESTAS (segun la pendiente) una superficie curva (Catmull-Rom de la rejilla gruesa)
+//     que redondea lomos y vaguadas: en lo llano se queda la cara de siempre (la ciudad, los muros, las obras);
+//   - mas el RELIEVE de la roca: crestas y gradas de ruido, casi nada en lo llano (3 cm) y hasta ~1,8 m en los montes,
+//     menos en las paredes (con mucho, cada triangulo miraba a un lado y salian dientes) y nada junto al agua.
+// `altura` es la cara de esa rejilla fina en (x, z), la misma que se pinta cerca (pies, IK, tela y hierba la pisan). Los
+// trozos de cerca guardan sus cotas (CACHE) y `altura` las lee de ahi; fuera de ellos las calcula.
+export const SUB = 4;
+const PF = PASO / SUB, NF = N * SUB, fF = NF + 1;
+export const TROZO = 25;                                   // celdas gruesas por trozo de suelo (200 m)
+const TF = TROZO * SUB, porLadoT = N / TROZO;
+export const CACHE = new Map();                            // clave del trozo -> Float32Array((TF + 1)^2)
+// la pendiente de cada vertice grueso y si hay agua cerca (0 / 1)
+const PEND = new Float32Array(f * f), SECO = new Float32Array(f * f);
+export function recalcularPendiente(i0, j0, i1, j1) {
+  for (let j = Math.max(0, j0 - 1); j <= Math.min(N, j1 + 1); j++) {
+    for (let i = Math.max(0, i0 - 1); i <= Math.min(N, i1 + 1); i++) {
+      const k = j * f + i;
+      const dx = H[j * f + Math.min(N, i + 1)] - H[j * f + Math.max(0, i - 1)], dz = H[Math.min(N, j + 1) * f + i] - H[Math.max(0, j - 1) * f + i];
+      PEND[k] = Math.hypot(dx, dz) / (2 * PASO);
+    }
+  }
+}
+recalcularPendiente(0, 0, N, N);
+{
+  SECO.fill(1);
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    if (AGUA[j * f + i] <= SIN_AGUA) continue;
+    for (let b = -2; b <= 2; b++) for (let a = -2; a <= 2; a++) { const ii = i + a, jj = j + b; if (ii >= 0 && jj >= 0 && ii <= N && jj <= N) SECO[jj * f + ii] = 0; }
+  }
+}
+function bilin(A, gx, gz) {
+  const i = Math.min(N - 1, Math.floor(gx)), j = Math.min(N - 1, Math.floor(gz)), fx = gx - i, fz = gz - j;
+  const a = A[j * f + i], b = A[j * f + i + 1], c = A[(j + 1) * f + i], d = A[(j + 1) * f + i + 1];
+  return (a + (b - a) * fx) * (1 - fz) + (c + (d - c) * fx) * fz;
+}
+const cr = (p0, p1, p2, p3, t) => p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)));
+function catmull(gx, gz) {
+  const i = Math.min(N - 1, Math.floor(gx)), j = Math.min(N - 1, Math.floor(gz)), fx = gx - i, fz = gz - j;
+  const fila = (jj) => {
+    const r = Math.max(0, Math.min(N, jj)) * f, x0 = Math.max(0, i - 1), x3 = Math.min(N, i + 2);
+    return cr(H[r + x0], H[r + i], H[r + i + 1], H[r + x3], fx);
+  };
+  return cr(fila(j - 1), fila(j), fila(j + 1), fila(j + 2), fz);
+}
+// la cota de un vertice de la rejilla fina (o de cualquier punto: la superficie de la que se toman los vertices)
+export function alturaVertice(x, z) {
+  const gx = (x + EXT) / PASO, gz = (z + EXT) / PASO;
+  if (gx < 0 || gz < 0 || gx > N || gz > N) return fuera(x, z);
+  const lin = alturaLineal(x, z), p = bilin(PEND, gx, gz);
+  const w = suave(0.2, 0.55, p);
+  let h = w > 0 ? lin + (catmull(gx, gz) - lin) * w : lin;
+  const seco = bilin(SECO, gx, gz);
+  if (seco <= 0) return h;
+  // el monte: cuanto de roca hay aqui (cuesta y altura); en lo llano casi nada (la ciudad, los muros, las obras)
+  const monte = suave(0.18, 0.65, p) * (1 - 0.55 * suave(1.0, 1.7, p)) * seco;
+  const llano = 0.03 * seco;
+  if (monte < 0.002) return h + llano * (fbm(x / 3.3 - 5, z / 3.3 + 9, 1) - 0.5);
+  // tres escalas: lomos de 45 m, crestas de 16 m (ruido "ridged": la roca se rompe en aristas, no en granos) y gradas
+  // de 5 m. Con solo la pequena, de lejos los montes salian lisos como dunas
+  const n0 = fbm(x / 45 + 7, z / 45 - 3, 2), n1 = fbm(x / 16 + 31, z / 16 - 17, 2), n2 = fbm(x / 5 - 5, z / 5 + 9, 2);
+  const cresta = 1 - Math.abs(2 * n1 - 1);
+  const alto = 1 + 0.6 * suave(250, 650, h);
+  return h + llano * (n2 - 0.5) + monte * alto * (6.0 * (n0 - 0.5) + 3.2 * (cresta - 0.6) + 1.1 * (n2 - 0.5));
+}
+// la cota de un vertice fino (i, j): de la cache de su trozo si esta hecho
+function vf(i, j) {
+  const ti = Math.min(porLadoT - 1, Math.floor(i / TF)), tj = Math.min(porLadoT - 1, Math.floor(j / TF));
+  const c = CACHE.get(tj * porLadoT + ti);
+  if (c) return c[(j - tj * TF) * (TF + 1) + (i - ti * TF)];
+  return alturaVertice(-EXT + i * PF, -EXT + j * PF);
+}
+// la diagonal de una celda fina: la de menos desnivel (sigue la curva de nivel; asi no salen dientes)
+export const diagFina = (h00, h10, h01, h11) => (Math.abs(h00 - h11) <= Math.abs(h10 - h01) ? 0 : 1);
+// la altura EXACTA de la cara pintada (pies, IK, tela y hierba pisan la faceta)
+export function altura(x, z) {
+  const gx = (x + EXT) / PF, gz = (z + EXT) / PF;
+  if (gx < 0 || gz < 0 || gx > NF || gz > NF) return fuera(x, z);
+  const i = Math.min(NF - 1, Math.floor(gx)), j = Math.min(NF - 1, Math.floor(gz)), fx = gx - i, fz = gz - j;
+  const h00 = vf(i, j), h10 = vf(i + 1, j), h01 = vf(i, j + 1), h11 = vf(i + 1, j + 1);
+  if (diagFina(h00, h10, h01, h11) === 0) return fx >= fz ? h00 + (h10 - h00) * fx + (h11 - h10) * fz : h00 + (h01 - h00) * fz + (h11 - h01) * fx;
   return fx + fz <= 1 ? h00 + (h10 - h00) * fx + (h01 - h00) * fz : h11 + (h01 - h11) * (1 - fx) + (h10 - h11) * (1 - fz);
 }
 export function normalY(x, z, e = 1.5) {
@@ -151,6 +236,7 @@ export function gradiente(x, z, e = 1.5) {
 // la curvatura en cada vertice (positiva en lo hondo): oscurece vaguadas, aclara lomos
 export const CURVA = new Float32Array(f * f);
 export function recalcularCurva(i0, j0, i1, j1) {
+  recalcularPendiente(i0, j0, i1, j1);
   for (let j = Math.max(1, j0 - 1); j <= Math.min(N - 1, j1 + 1); j++) {
     for (let i = Math.max(1, i0 - 1); i <= Math.min(N - 1, i1 + 1); i++) { const k = j * f + i; CURVA[k] = (H[k - 1] + H[k + 1] + H[k - f] + H[k + f]) / 4 - H[k]; }
   }

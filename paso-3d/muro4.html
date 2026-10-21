@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Boundland · Muro Exterior</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #050608; overflow: hidden; font: 13px/1.5 Bahnschrift, "Segoe UI", system-ui, sans-serif; color: #e9eef3; }
+  #vista { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #titulo { position: fixed; left: 18px; top: 14px; letter-spacing: .32em; font-size: 11px; opacity: .72; text-shadow: 0 1px 6px rgba(0,0,0,.6); pointer-events: none; }
+  #titulo b { display: block; font-size: 17px; letter-spacing: .18em; font-weight: 600; }
+  #ayuda { position: fixed; left: 18px; bottom: 16px; line-height: 1.8; opacity: .85; text-shadow: 0 1px 4px rgba(0,0,0,.8); pointer-events: none; }
+  #ayuda kbd { display: inline-block; min-width: 14px; padding: 0 5px; margin-right: 3px; border: 1px solid rgba(255,255,255,.4); border-radius: 4px; font: 11px/16px inherit; text-align: center; }
+  #ayuda .fijo { opacity: .6; font-size: 11px; }
+  .oculto { display: none !important; }
+  .dato { letter-spacing: .2em; font-size: 11px; opacity: .8; }
+  #relleno { position: fixed; right: 18px; top: 14px; font-size: 11px; letter-spacing: .12em; opacity: 0; transition: opacity 1.2s; color: #dfe6ec; text-shadow: 0 1px 4px rgba(0,0,0,.6); pointer-events: none; }
+  #relleno.visible { opacity: .75; }
+  #medidor { position: fixed; right: 12px; bottom: 12px; width: 360px; height: 110px; border-radius: 6px; }
+  #carga { position: fixed; inset: 0; display: grid; place-items: center; background: #050608; color: #6f7a86; letter-spacing: .3em; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="vista"></canvas>
+<div id="titulo">BOUNDLAND · PRUEBA<b>EL MURO EXTERIOR · 4 M</b></div>
+<div id="ayuda"><div id="teclas"></div><div class="fijo"><kbd>R</kbd> volver &nbsp; <kbd>N</kbd> neblina &nbsp; <kbd>H</kbd> ocultar</div></div>
+<div id="carga">CARGANDO…</div>
+<script type="module" src="js/muro4/main.js"></script>
+</body>
+</html>

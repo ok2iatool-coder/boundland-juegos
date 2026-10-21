@@ -660,6 +660,51 @@
     180.0,
     366.0
    ]
+  },
+  "valla": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 16,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    307,
+    390
+   ],
+   "pies": [
+    117.86,
+    367.0
+   ]
+  },
+  "encaramarse": {
+   "fotogramas": 7,
+   "cols": 7,
+   "fps": 22,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    290,
+    401
+   ],
+   "pies": [
+    99.04,
+    362.0
+   ]
+  },
+  "voltereta": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 10,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    358,
+    404
+   ],
+   "pies": [
+    92.54,
+    363.5
+   ]
   }
  },
  "intro_encaje": {

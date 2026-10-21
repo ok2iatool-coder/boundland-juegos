@@ -95,9 +95,12 @@ export function espiga() {
 // ---------------- sombreador: viento + campo, por hoja ----------------
 // `porCamara`: ademas de lejos del 18, se encoge lejos de la CAMARA (en el mundo grande, vista desde arriba, la hierba
 // de cerca no queda como un circulo sobre el suelo)
-export function material(tono, comunes, funde, { porCamara = false } = {}) {
+export function material(tono, comunes, funde, { porCamara = false, entra = null } = {}) {
   const mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: tono, side: THREE.DoubleSide });
-  if (porCamara) mat.defines = { POR_CAMARA: '' };
+  mat.defines = {};
+  if (porCamara) mat.defines.POR_CAMARA = '';
+  // `entra`: cerca del foco no se dibuja (alli va otra hierba, la fina del mapa del mundo) y aparece entre entra[0] y entra[1]
+  if (entra) mat.defines.ENTRA = `vec2(${entra[0].toFixed(2)}, ${entra[1].toFixed(2)})`;
   mat.onBeforeCompile = (s) => {
     Object.assign(s.uniforms, comunes, { uFunde: { value: new THREE.Vector2(...funde) } });
     s.vertexShader = `attribute vec2 raiz;
@@ -138,6 +141,9 @@ uniform vec2 uFunde;
         dq = max(dq, distance((modelMatrix * instanceMatrix[3]).xyz, cameraPosition) - 12.0);
         #endif
         float queda = 1.0 - smoothstep(uFunde.x, uFunde.y, dq);
+        #ifdef ENTRA
+        queda *= smoothstep(ENTRA.x, ENTRA.y, distance(instanceMatrix[3].xz, uFoco.xz));
+        #endif
         transformed = (transformed + transpose(m) * d / s2) * queda;
       }`);
   };

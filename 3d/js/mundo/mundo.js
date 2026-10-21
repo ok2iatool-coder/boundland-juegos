@@ -1,5 +1,6 @@
 // EL MAPA DEL MUNDO (?mapa=mundo): la GEOGRAFIA de los planos del mundo abierto (diseno/planos/mapa.py) para recorrerla
-// con el 18 y modelarla a mano, sin nada encima todavia (ni muros, ni ciudad, ni caminos). 4 x 4 km: la Sierra al norte,
+// con el 18 y modelarla a mano. Encima, de momento, solo LA MURALLA (muralla.js, 21-10): el muro de 40 m de la prueba
+// del paso a 3D en circulo alrededor de la Base; ni ciudad ni caminos. 4 x 4 km: la Sierra al norte,
 // los Picos de Levante al este con nieve, su lago helado, el arroyo, la Cascada, la poza y el Lago; el rio que baja al
 // oeste y se va por la Hoz; la Cuenca, el Linde, el llano de la Capital y, al sur, el llano de la Base al pie del Cortado
 // y los Cerros. Es una copia del mapa de terreno con su editor (tecla E) y su mapa (tecla M); lo editado se guarda en
@@ -17,6 +18,10 @@ import { crearCielo, BRUMA } from './cielo.js';
 import { crearPlano } from './plano.js';
 import { crearEditor } from './editor.js';
 import { crearModelos } from './modelos.js';
+import { crearMuralla } from './muralla.js';
+import { crearCimientos, alturaObra } from './cimientos.js';
+import { crearExterior } from './exterior.js';
+import { crearMacro } from './macro.js';
 import { TONO } from './tono.js';
 
 export const LADO = R.LADO;
@@ -52,8 +57,13 @@ export function crearMundo(scene) {
   const rocas = crearRocas(grupo, TONO);
   const paredes = crearParedes(grupo, TONO);
   const agua = crearAgua(grupo, TONO);
+  const muralla = crearMuralla(grupo);
   const hierba = crearHierba({ grupo, camara: () => enlaces.cam });
   const cajas = [];
+  const cimientos = crearCimientos(grupo, cajas);   // la obra de la ciudad: antes que la hierba se haga
+  const exterior = crearExterior(grupo, cajas);     // el muro de 4 m, a 300 m del grande (21-10)
+  exterior.recortarSuelo(suelo.material);
+  const macro = crearMacro(grupo, cajas);           // el macroedificio de El Panal sur (21-10)
   let plano = null;
   const modelos = crearModelos({ grupo, cajas, alCambiar: (x0, z0, x1, z1) => { hierba.tirarZona(x0, z0, x1, z1); if (plano) plano.rehacer(); } });
   const msCarga = Math.round(performance.now() - t0);
@@ -88,6 +98,7 @@ export function crearMundo(scene) {
     H.pos.set(p.x, R.altura(p.x, p.z), p.z);
     suelo.actualizar(H.pos, true);
     H.vel.set(0, 0); H.vy = 0; H.suelo = true;
+    if (H.reiniciarCuerpo) H.reiniciarCuerpo();
     if (enlaces.camara) enlaces.camara.lista = false;
     hierba.actualizar(ultimoT, H.pos, H, 0, true);
   }
@@ -124,6 +135,8 @@ export function crearMundo(scene) {
     scene.background.copy(_bruma);
     cielo.color.copy(_luz.set(0xf3efd6).lerp(LUZ_NORTE, 0.6 * nn));
     agua.actualizar(t, dt);
+    muralla.actualizar(foco);
+    exterior.actualizar(foco, editor.activo ? null : heroe);
     hierba.actualizar(t, foco, heroe, dt);
     cadaZona -= dt;
     if (cadaZona <= 0) {
@@ -135,23 +148,27 @@ export function crearMundo(scene) {
   // los bordes del mundo, las paredes que no se suben y el agua honda (desde donde esta el 18 ahora)
   function limitar(p) {
     R.limitar(p);
-    if (enlaces.heroe && enlaces.heroe.listo) R.pasoPermitido(enlaces.heroe.pos, p);
+    muralla.limitar(p);
+    if (enlaces.heroe && enlaces.heroe.listo) {
+      R.pasoPermitido(enlaces.heroe.pos, p);
+      exterior.limitar(p, enlaces.heroe.pos, enlaces.heroe.suelo);
+    }
   }
   const puntoCamino = (tt) => ({ x: R.SALIDA.x, z: R.SALIDA.z - tt * 80, tx: 0, tz: -1 });
 
   return {
-    LADO, borde: 1e4, limitar, altura: R.altura, actualizar, puntoCamino, sol, hierba, agua,
+    LADO, borde: 1e4, limitar, altura: (x, z) => exterior.altura(x, z, R.altura(x, z) + alturaObra(x, z)), actualizar, puntoCamino, sol, hierba, agua,
     choques: { circulos: CHOQUES_ROCAS, cajas },
     salida: R.SALIDA,
     titulo: 'EL MUNDO', lejos: 14000, cerca: 0.1,
-    conectar(e) { Object.assign(enlaces, e); editor.conectar({ heroe: e.heroe, C: e.camara, cam: e.cam, canvas: e.canvas }); },
-    tecla, bloqueado: () => plano.abierto || editor.activo, plano, ir, editor, modelos,
+    conectar(e) { Object.assign(enlaces, e); muralla.conectar(e.renderer); editor.conectar({ heroe: e.heroe, C: e.camara, cam: e.cam, canvas: e.canvas }); },
+    muralla, exterior, tecla, bloqueado: () => plano.abierto || editor.activo, plano, ir, editor, modelos,
     raton: (tipo, e) => editor.raton(tipo, e),
     ayuda: `<div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> correr &nbsp; <kbd>Mayús</kbd> andar &nbsp; <kbd>Espacio</kbd> saltar &nbsp; <kbd>1</kbd>-<kbd>4</kbd> gestos</div>
       <div><kbd>M</kbd> mapa del mundo: clic en un sitio y el 18 aparece allí</div>
       <div><kbd>E</kbd> editor: subir, bajar, allanar, suavizar, pintar (también nieve), rocas y modelos 3D</div>
       <div>ratón: cámara (clic para fijarlo, <kbd>Esc</kbd> para soltar) · rueda: acercar · <kbd>H</kbd> ocultar</div>`,
     zona: R.zona,
-    get info() { return { msCarga, rocas: ROCAS.length, ...suelo.info(), ...rocas.info(), ...agua.info(), ...modelos.info(), ...hierba.info(), zona: zonaAhora }; },
+    get info() { return { msCarga, rocas: ROCAS.length, ...suelo.info(), ...rocas.info(), ...agua.info(), ...modelos.info(), ...hierba.info(), ...muralla.info(), ...cimientos.info(), ...exterior.info(), ...macro.info(), zona: zonaAhora }; },
   };
 }

@@ -147,6 +147,7 @@ function entrada() {
     z: (t('KeyW', 'ArrowUp') ? 1 : 0) - (t('KeyS', 'ArrowDown') ? 1 : 0),
     andar: t('ShiftLeft', 'ShiftRight'),
     saltar: saltoPedido, gesto: gestoPedido,
+    saltoSostenido: t('Space'),   // soltarlo subiendo corta el salto (salto corto con un toque)
   };
   saltoPedido = false;
   gestoPedido = 0;

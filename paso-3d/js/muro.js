@@ -9,7 +9,8 @@
 // la tuberia general, REJILLAS de ventilacion, ESCOTILLAS de otros conductos (una con su balconcillo abandonado),
 // DESCONCHONES con la ferralla a la vista (danos.js), ROTULOS de plantilla, la BANDEJA DE CABLES, la caja de registro y el aplique
 // junto a la salida, la ESCALA CON JAULA de la base a la coronacion y la que baja al suelo, y arriba la CORONACION con
-// goterón, parapeto, barandilla y CONCERTINA, dos GARITAS voladas y seis TORRES DE FOCOS con su cono de luz en la bruma.
+// goterón, parapeto, barandilla y CONCERTINA, dos GARITAS voladas y seis TORRES DE FOCOS (su haz en la bruma, el polvo y
+// el deslumbramiento, en focos.js).
 // Abajo, el SUELO: solera de hormigon al pie del muro, canaleta, cascotes, charcos y tierra.
 //
 // Lo que es caja va a los lotes de mundo3d.js (una malla por material, con su casco de tinta); los paneles, el fondo de
@@ -548,9 +549,7 @@ export function construirMuro(scene, k) {
     for (const xx of [x1, xb - 0.05]) cajaE('aceroOsc', xx - 0.05, xx + 0.05, y0 - 0.28, y0 - 0.16, z - 1.3, z + 1.3, { tinta: 0.006 });
   });
 
-  // ---- torres de focos sobre la coronacion, con su cono de luz en la bruma
-  const conos = [];
-  const mCono = new THREE.MeshBasicMaterial({ color: '#c9d4df', transparent: true, opacity: 0.03, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  // ---- torres de focos sobre la coronacion (su haz, el polvo y el deslumbramiento van en focos.js)
   const focos = [];
   for (const z of [-30, -18, -6, 6, 18, 30]) {
     cilindro('aceroOsc', V(MX + 0.55, T, z), V(MX + 0.55, T + 4.0, z), 0.08, 8, 0.01);
@@ -568,19 +567,15 @@ export function construirMuro(scene, k) {
     cajaE('aceroOsc', MX + 1.5, MX + 2.15, T + 3.85, T + 3.89, z - 0.36, z + 0.36, { tinta: 0.004 });
     for (let x = MX + 1.6; x < MX + 2.0; x += 0.09) cajaE('aceroOsc', x, x + 0.02, T + 3.89, T + 3.98, z - 0.27, z + 0.27, { tinta: 0 });
     cajaE('acero', MX + 0.75, MX + 1.0, T + 3.6, T + 3.76, z - 0.1, z + 0.1, { tinta: 0.006 });
-    // el cono: del foco hacia abajo y hacia fuera (hacia la base y la ciudad)
-    const cono = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 4.2, 14, 24, 1, true).translate(0, -7, 0), conos.length === 4 ? mCono.clone() : mCono);
-    cono.position.set(MX + 1.8, T + 3.4, z);
-    cono.rotation.z = 0.42;
-    cono.renderOrder = 3;
-    conos.push(cono); scene.add(cono);
-    focos.push({ z, x: MX + 1.8, y: T + 3.4 });
+    // de la lente hacia abajo y hacia fuera, hacia la ciudad (los dos de la base, a donde apunta su luz, abajo)
+    focos.push({ z, x: MX + 1.8, y: T + 3.4, direccion: [0.408, -0.913, (z > 0 ? 1 : -1) * 0.06] });
   }
   // dos de verdad, los que alumbran la base (los demas solo se ven)
   const luces = [];
   for (const [z, tx, tz] of [[-6, 21.5, -4.5], [6, 22.5, 2.5]]) {
     const s = new THREE.SpotLight('#dfe7f0', 26, 34, 0.5, 0.7, 1.4);
     s.position.set(MX + 1.8, T + 3.4, z); s.target.position.set(tx, 0, tz);
+    focos.find((f) => f.z === z).objetivo = [tx, 0, tz];        // su haz, por donde va su luz
     scene.add(s, s.target); luces.push(s);
   }
 
@@ -729,8 +724,6 @@ export function construirMuro(scene, k) {
   // ---- por fotograma: los focos tiemblan un poco y uno falla
   function actualizar(t) {
     luces[0].intensity = 26 * (0.96 + 0.04 * Math.sin(t * 17.3));
-    const falla = Math.sin(t * 0.9) > 0.86 && Math.sin(t * 31) > 0;
-    conos[4].material.opacity = falla ? 0.008 : mCono.opacity;     // su propio material: cambiar de material compila uno
     aplique.intensity = 2.6 * (0.9 + 0.1 * Math.sin(t * 23) * Math.sin(t * 5.3));
   }
   const dano = { ...danos.cuenta, tris: mDanos.tris, barras: danos.barras.length };

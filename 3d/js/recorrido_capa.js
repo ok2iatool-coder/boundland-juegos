@@ -29,6 +29,7 @@ export async function grabar(D, { fps = 60, cada = 0, prefijo = 'rc', umbral = 0
   D.ir(0, 0);
   const H = D.heroe;
   if (H.vel) H.vel.set(0, 0, 0);
+  if (H.reiniciarCuerpo) H.reiniciarCuerpo();
   H.giro = 0; H.vy = 0;
   if (H.mixer) H.mixer.setTime(0);
   D.avanzar(1 / fps, 90);

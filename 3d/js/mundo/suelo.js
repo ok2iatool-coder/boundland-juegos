@@ -3,7 +3,7 @@
 // con estratos en los cortados, grava en las orillas, el fondo del agua y NIEVE por encima de la cota de nieve (no en
 // las paredes: alli no agarra). Fuera del mundo, lomas en grueso que cierran la vista.
 import * as THREE from 'three';
-import { H, DIAG, N, PASO, EXT, forma, curvatura, fbm, suave, hash, radioBorde, pinturaEn, MATERIALES, COTA_NIEVE, distAgua, norte } from './relieve.js';
+import { H, N, PASO, EXT, forma, curvatura, fbm, suave, hash, radioBorde, pinturaEn, MATERIALES, COTA_NIEVE, distAgua, norte, alturaVertice, diagFina, SUB, TROZO, CACHE } from './relieve.js';
 import { cubierta, calva, distRoca } from './sitios.js';
 
 export const COLOR = {
@@ -78,72 +78,119 @@ export function colorCara(x, y, z, ny, out) {
   return out.multiplyScalar(k * (0.95 + 0.1 * hash(Math.round(x / 2), Math.round(z / 2), 5)));
 }
 
-// ---------------- el suelo POR TROZOS (v5, 15 km) ----------------
-// CERCA: trozos de 200 m (25 celdas de 8 m) con el color por cara, los que caen a menos de CERCA m del foco (el 18 o la
-// camara del editor); se hacen unos pocos por fotograma (los mas cercanos primero) y se tiran al alejarse.
+// ---------------- el suelo POR TROZOS (v5, 15 km; 21-10: sobre la rejilla FINA) ----------------
+// CERCA: trozos de 200 m, los que caen a menos de CERCA m del foco (el 18 o la camara del editor), sobre la rejilla FINA
+// de relieve.js: celdas de 2 m hasta 380 m del foco, de 4 m hasta 760 y de 8 m mas alla (BANDAS). Cada vertice lleva su
+// color (colorCara con la pendiente de alli) y cada cara la media de los suyos: sigue siendo low poly (una cara, un
+// color), pero las franjas de color ya no cruzan una cara de 8 m de lado a lado. Los bordes de cada trozo van rectos
+// entre los vertices de 8 m: casan con el de al lado sea del detalle que sea. Los de 2 m guardan sus cotas en R.CACHE.
+// Se hacen unos pocos por fotograma (los mas cercanos primero) y se tiran al alejarse.
 // LEJOS: UNA malla del mundo entero cada 40 m, metro y medio por debajo, que no se dibuja dentro del circulo que ya
 // cubren los trozos de cerca (un `discard` en su sombreador). Asi se ve el mundo entero sin pintar 7 millones de caras.
-const CEL = 25, CH = CEL * PASO;               // 200 m por trozo
+const CEL = TROZO, CH = CEL * PASO;            // 200 m por trozo
 const CERCA = 1100, TIRAR = 1450;              // m del foco al trozo
+const BANDAS = [[380, SUB], [760, 2], [Infinity, 1]];
+const subDe = (d) => BANDAS.find(([m]) => d < m)[1];
 const LP = 5, LN = N / LP;                     // la malla de lejos: un vertice cada 5 (40 m)
 export function crearSuelo(grupo, tono) {
   const mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: tono, flatShading: true });
   const porLado = N / CEL, f = N + 1;
   const c = new THREE.Color();
-  const trozos = new Map();                      // clave tj * porLado + ti -> malla
+  const trozos = new Map();                      // clave tj * porLado + ti -> { m, s }
   let tris = 0;
-  const P = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
-  const v = (q, i, j) => { q[0] = -EXT + i * PASO; q[1] = H[j * f + i]; q[2] = -EXT + j * PASO; return q; };
-  // el color se toma a la cota MEDIA de la celda (y, en las paredes, en su centro): con la de cada triangulo, en una
-  // pared de 8 m de lado los dos triangulos de cada celda caian en estratos distintos y el Cortado salia en dientes
-  const centro = [0, 0, 0];
-  function tri(pos, col, k, a, b, d, conColor) {
-    const ux = b[0] - a[0], uz = b[2] - a[2], wx = d[0] - a[0], wz = d[2] - a[2];
-    if (uz * wx - ux * wz < 0) [b, d] = [d, b];
-    pos.set(a, k * 3); pos.set(b, k * 3 + 3); pos.set(d, k * 3 + 6);
-    if (!conColor) return;
-    const e1x = b[0] - a[0], e1y = b[1] - a[1], e1z = b[2] - a[2], e2x = d[0] - a[0], e2y = d[1] - a[1], e2z = d[2] - a[2];
-    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
-    const nyN = Math.abs(ny) / (Math.hypot(nx, ny, nz) || 1), pared = nyN < 0.6;
-    const cx = pared ? centro[0] : (a[0] + b[0] + d[0]) / 3, cz = pared ? centro[2] : (a[2] + b[2] + d[2]) / 3;
-    colorCara(cx, centro[1], cz, nyN, c);
-    for (let q = 0; q < 3; q++) { col[k * 3 + q * 3] = c.r; col[k * 3 + q * 3 + 1] = c.g; col[k * 3 + q * 3 + 2] = c.b; }
-  }
-  // la celda (i, j) en su trozo (si el trozo esta hecho)
-  function celda(i, j, conColor = true, t = trozos.get(Math.floor(j / CEL) * porLado + Math.floor(i / CEL))) {
-    if (!t) return false;
-    const ti = Math.floor(i / CEL), tj = Math.floor(j / CEL);
-    const pos = t.geometry.attributes.position.array, col = t.geometry.attributes.color.array;
-    const k = ((j - tj * CEL) * CEL + (i - ti * CEL)) * 6;
-    v(P[0], i, j); v(P[1], i + 1, j); v(P[2], i, j + 1); v(P[3], i + 1, j + 1);
-    centro[0] = P[0][0] + PASO / 2; centro[2] = P[0][2] + PASO / 2;
-    centro[1] = (P[0][1] + P[1][1] + P[2][1] + P[3][1]) / 4;
-    if (DIAG[j * N + i] === 0) { tri(pos, col, k, P[0], P[1], P[3], conColor); tri(pos, col, k + 3, P[0], P[3], P[2], conColor); }
-    else { tri(pos, col, k, P[0], P[1], P[2], conColor); tri(pos, col, k + 3, P[1], P[3], P[2], conColor); }
-    return true;
-  }
-  function hacer(ti, tj) {
-    const n = CEL * CEL * 6;
+  const msHacer = { 1: 0, 2: 0, 4: 0 };          // lo que tarda (en total) el trozo mas lento de cada detalle (info)
+  // un trozo POR PASOS (un generador): cotas, bordes, colores y caras a tandas de filas, para repartirlo entre
+  // fotogramas (uno fino de 2 m entero eran ~50 ms de golpe: un tiron cada vez que se acercaba uno). El de antes sigue
+  // a la vista hasta que el nuevo esta.
+  function* pasos(ti, tj, s) {
+    let gasto = 0, t0 = performance.now();
+    const corte = () => { gasto += performance.now() - t0; };
+    const k = tj * porLado + ti;
+    const n = CEL * s, nv = n + 1, paso = PASO / s;
+    const x0 = -EXT + ti * CH, z0 = -EXT + tj * CH;
+    const hv = new Float32Array(nv * nv), cv = new Float32Array(nv * nv * 3);
+    const tanda = Math.max(4, Math.round(10 * 4 / s));
+    for (let j = 0; j < nv; j++) {
+      for (let i = 0; i < nv; i++) hv[j * nv + i] = alturaVertice(x0 + i * paso, z0 + j * paso);
+      if (j % tanda === tanda - 1) { corte(); yield; t0 = performance.now(); }
+    }
+    // los BORDES, rectos entre los vertices de 8 m: asi casan con el trozo de al lado tenga el detalle que tenga (con el
+    // relieve de la roca, un trozo fino y uno grueso diferian metros en el borde y se veia el escalon)
+    if (s > 1) {
+      for (let t = 0; t < nv; t++) {
+        const a8 = Math.floor(t / s) * s, b8 = Math.min(n, a8 + s), u = (t - a8) / s;
+        if (t === a8) continue;
+        for (const [jj, horiz] of [[0, true], [n, true], [0, false], [n, false]]) {
+          const ka = horiz ? jj * nv + a8 : a8 * nv + jj, kb = horiz ? jj * nv + b8 : b8 * nv + jj, kt = horiz ? jj * nv + t : t * nv + jj;
+          hv[kt] = hv[ka] + (hv[kb] - hv[ka]) * u;
+        }
+      }
+    }
+    // el color de cada vertice, con la pendiente de alli (en los bordes, hacia dentro)
+    for (let j = 0; j < nv; j++) {
+      for (let i = 0; i < nv; i++) {
+        const ia = Math.max(0, i - 1), ib = Math.min(n, i + 1), ja = Math.max(0, j - 1), jb = Math.min(n, j + 1);
+        const gx = (hv[j * nv + ib] - hv[j * nv + ia]) / ((ib - ia) * paso), gz = (hv[jb * nv + i] - hv[ja * nv + i]) / ((jb - ja) * paso);
+        colorCara(x0 + i * paso, hv[j * nv + i], z0 + j * paso, 1 / Math.hypot(gx, 1, gz), c);
+        const q3 = (j * nv + i) * 3;
+        cv[q3] = c.r; cv[q3 + 1] = c.g; cv[q3 + 2] = c.b;
+      }
+      if (j % tanda === tanda - 1) { corte(); yield; t0 = performance.now(); }
+    }
+    // las caras: una cara hacia arriba por triangulo, con el color medio de sus tres vertices (indices en hv: va = j*nv+i)
+    const nt = n * n * 2;
+    const pos = new Float32Array(nt * 9), col = new Float32Array(nt * 9);
+    let q = 0;
+    const cara = (va, vb, vd) => {
+      const o = q * 9;
+      for (let t = 0; t < 3; t++) {
+        const v = t === 0 ? va : t === 1 ? vb : vd, jv = (v / nv) | 0, iv = v - jv * nv;
+        pos[o + t * 3] = x0 + iv * paso; pos[o + t * 3 + 1] = hv[v]; pos[o + t * 3 + 2] = z0 + jv * paso;
+      }
+      const r = (cv[va * 3] + cv[vb * 3] + cv[vd * 3]) / 3, g = (cv[va * 3 + 1] + cv[vb * 3 + 1] + cv[vd * 3 + 1]) / 3, b = (cv[va * 3 + 2] + cv[vb * 3 + 2] + cv[vd * 3 + 2]) / 3;
+      for (let t = 0; t < 3; t++) { col[o + t * 3] = r; col[o + t * 3 + 1] = g; col[o + t * 3 + 2] = b; }
+      q++;
+    };
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const A = j * nv + i, B = A + 1, C = A + nv, D = C + 1;
+        // (el orden ya da la cara hacia arriba con z al sur)
+        if (diagFina(hv[A], hv[B], hv[C], hv[D]) === 0) { cara(A, D, B); cara(A, C, D); }
+        else { cara(A, C, B); cara(B, C, D); }
+      }
+      if (j % (tanda * 2) === tanda * 2 - 1) { corte(); yield; t0 = performance.now(); }
+    }
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
-    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    g.computeBoundingSphere();
     const m = new THREE.Mesh(g, mat);
     m.receiveShadow = true;
     m.castShadow = false;                       // (como en el terreno: con el sol bajo se sombreaba a si mismo en manchas)
     m.name = 'suelo';
-    for (let j = tj * CEL; j < (tj + 1) * CEL; j++) for (let i = ti * CEL; i < (ti + 1) * CEL; i++) celda(i, j, true, m);
-    g.computeVertexNormals();
-    g.computeBoundingSphere();
+    if (trozos.has(k)) tirar(k);
     grupo.add(m);
-    trozos.set(tj * porLado + ti, m);
-    tris += n / 3;
+    trozos.set(k, { m, s });
+    if (s === SUB) CACHE.set(k, hv);
+    tris += nt;
+    corte();
+    msHacer[s] = Math.max(msHacer[s], Math.round(gasto));
   }
+  // de una vez (al llegar a un sitio de golpe y en el editor)
+  function hacer(ti, tj, s) {
+    obras.delete(tj * porLado + ti);
+    const g = pasos(ti, tj, s);
+    while (!g.next().done);
+  }
+  const obras = new Map();                       // los trozos a medio hacer: clave -> { g, s, d }
   function tirar(k) {
-    const m = trozos.get(k);
-    grupo.remove(m);
-    m.geometry.dispose();
+    const t = trozos.get(k);
+    grupo.remove(t.m);
+    tris -= t.m.geometry.attributes.position.count / 3;
+    t.m.geometry.dispose();
     trozos.delete(k);
-    tris -= CEL * CEL * 2;
+    CACHE.delete(k);
   }
   // distancia del foco al trozo (a su punto mas cercano)
   const dist = (ti, tj, x, z) => {
@@ -188,7 +235,7 @@ export function crearSuelo(grupo, tono) {
   lejos.m.geometry.computeVertexNormals();
   lejos.m.geometry.computeBoundingSphere();
 
-  // ---------------- cada fotograma: hacer lo que falta cerca y tirar lo lejano ----------------
+  // ---------------- cada fotograma: hacer lo que falta cerca, afinar lo que se acerca y tirar lo lejano ----------------
   let radioHecho = 0;
   function actualizar(foco, todo = false) {
     const fi = Math.floor((foco.x + EXT) / CH), fj = Math.floor((foco.z + EXT) / CH), R = Math.ceil(CERCA / CH) + 1;
@@ -197,20 +244,29 @@ export function crearSuelo(grupo, tono) {
     for (let tj = Math.max(0, fj - R); tj <= Math.min(porLado - 1, fj + R); tj++) {
       for (let ti = Math.max(0, fi - R); ti <= Math.min(porLado - 1, fi + R); ti++) {
         const d = dist(ti, tj, foco.x, foco.z);
-        if (d > CERCA || trozos.has(tj * porLado + ti)) continue;
-        faltan.push([d, ti, tj]);
-        hueco = Math.min(hueco, d);
+        if (d > CERCA) continue;
+        const t = trozos.get(tj * porLado + ti), quiere = subDe(d);
+        if (!t) { faltan.push([d, ti, tj, quiere]); hueco = Math.min(hueco, d); continue; }
+        // mas fino al acercarse; mas grueso solo bien pasado el limite (si no, en la raya se rehacia una y otra vez)
+        if (quiere > t.s || subDe(Math.max(0, d - 60)) < t.s) faltan.push([d + 0.5, ti, tj, quiere]);
       }
     }
     faltan.sort((a, b) => a[0] - b[0]);
-    // con `todo` (al llegar a un sitio de golpe) los de alrededor ya; si no, hasta ~8 ms por fotograma
-    const t0 = performance.now();
     let hechos = 0;
-    for (const [d, ti, tj] of faltan) {
-      if (todo ? d > 450 : (hechos >= 1 && performance.now() - t0 > 8)) break;
-      hacer(ti, tj);
-      hechos++;
-      if (d <= hueco) hueco = Infinity;
+    if (todo) {
+      // al llegar a un sitio de golpe: los de alrededor ya, enteros
+      for (const [d, ti, tj, s] of faltan) { if (d > 450) break; hacer(ti, tj, s); hechos++; }
+    } else {
+      // si no, por pasos: los dos que mas faltan se empiezan y se avanza en ellos hasta ~5 ms por fotograma
+      for (const [d, ti, tj, s] of faltan.slice(0, 2)) {
+        const k = tj * porLado + ti, o = obras.get(k);
+        if (!o || o.s !== s) obras.set(k, { g: pasos(ti, tj, s), s, d });
+      }
+      const t0 = performance.now();
+      for (const [k, o] of [...obras].sort((a, b) => a[1].d - b[1].d)) {
+        while (performance.now() - t0 < 5) { if (o.g.next().done) { obras.delete(k); hechos++; break; } }
+        if (performance.now() - t0 >= 5) break;
+      }
     }
     if (hechos) { hueco = Infinity; for (const [d, ti, tj] of faltan) if (!trozos.has(tj * porLado + ti)) hueco = Math.min(hueco, d); }
     for (const k of [...trozos.keys()]) {
@@ -223,51 +279,35 @@ export function crearSuelo(grupo, tono) {
     lejos.U.uRadio.value = Math.max(0, radioHecho);
   }
 
-  // EL EDITOR: rehacer las celdas de un recuadro; la forma al momento, el color poco a poco (y la malla de lejos)
-  const pendiente = new Set(), sucios = new Set(), lejosSucio = new Set();
-  function rehacer(i0, j0, i1, j1, conColor = true) {
-    i0 = Math.max(0, i0); j0 = Math.max(0, j0); i1 = Math.min(N - 1, i1); j1 = Math.min(N - 1, j1);
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      if (celda(i, j, false)) {
-        if (conColor) pendiente.add(j * N + i);
-        sucios.add(Math.floor(j / CEL) * porLado + Math.floor(i / CEL));
-      }
+  // EL EDITOR: los trozos que tocan un recuadro (en celdas de 8 m) se rehacen enteros en pintarPendiente (forma y color a
+  // la vez), y la malla de lejos
+  const sucios = new Set(), lejosSucio = new Set();
+  function rehacer(i0, j0, i1, j1) {
+    i0 = Math.max(0, i0 - 1); j0 = Math.max(0, j0 - 1); i1 = Math.min(N - 1, i1 + 1); j1 = Math.min(N - 1, j1 + 1);
+    for (let tj = Math.floor(j0 / CEL); tj <= Math.floor(j1 / CEL); tj++) for (let ti = Math.floor(i0 / CEL); ti <= Math.floor(i1 / CEL); ti++) {
+      const k = tj * porLado + ti;
+      if (trozos.has(k)) sucios.add(k); else CACHE.delete(k);
     }
     for (let J = Math.floor(j0 / LP); J <= Math.ceil((j1 + 1) / LP); J++) for (let I = Math.floor(i0 / LP); I <= Math.ceil((i1 + 1) / LP); I++) {
       if (I >= 0 && J >= 0 && I <= LN && J <= LN) lejosSucio.add(J * (LN + 1) + I);
     }
-    cerrar(false);
   }
   function pintarPendiente(ms = 6) {
     const t0 = performance.now();
-    let n = 0;
-    for (const k of pendiente) {
-      pendiente.delete(k);
-      const i = k % N, j = (k - i) / N;
-      if (celda(i, j, true)) sucios.add(Math.floor(j / CEL) * porLado + Math.floor(i / CEL));
-      if ((++n & 31) === 0 && performance.now() - t0 > ms) break;
+    for (const k of sucios) {
+      sucios.delete(k);
+      const t = trozos.get(k);
+      if (t) hacer(k % porLado, (k - (k % porLado)) / porLado, t.s);
+      if (performance.now() - t0 > ms) break;
     }
-    cerrar(true);
-    if (!pendiente.size && lejosSucio.size) {
+    if (!sucios.size && lejosSucio.size) {
       for (const k of lejosSucio) verticeLejos(k % (LN + 1), Math.floor(k / (LN + 1)));
       lejosSucio.clear();
       const g = lejos.m.geometry;
       g.attributes.position.needsUpdate = g.attributes.color.needsUpdate = true;
       g.computeVertexNormals();
     }
-    return pendiente.size;
-  }
-  function cerrar(color) {
-    for (const k of sucios) {
-      const m = trozos.get(k);
-      if (!m) continue;
-      const g = m.geometry;
-      g.attributes.position.needsUpdate = true;
-      if (color) g.attributes.color.needsUpdate = true;
-      g.computeVertexNormals();
-      g.computeBoundingSphere();
-    }
-    sucios.clear();
+    return sucios.size + (lejosSucio.size ? 1 : 0);
   }
 
   // ---------------- fuera del mundo: lomas en grueso hasta 2,5 km mas alla del borde, sin sombras ----------------
@@ -302,8 +342,9 @@ export function crearSuelo(grupo, tono) {
     trisFuera = pos.length / 9;
   }
   return {
-    actualizar, rehacer, pintarPendiente, get pendiente() { return pendiente.size; },
-    info: () => ({ triangulosSuelo: tris, trozosSuelo: trozos.size, triangulosLejos: LN * LN * 2, triangulosFuera: trisFuera, radioCerca: Math.round(radioHecho) }),
+    actualizar, rehacer, pintarPendiente, get pendiente() { return sucios.size + (lejosSucio.size ? 1 : 0); },
+    material: mat,                 // (el muro exterior le quita la banda del foso)
+    info: () => ({ triangulosSuelo: tris, trozosSuelo: trozos.size, trozosFinos: [...trozos.values()].filter((t) => t.s === SUB).length, msTrozoSuelo: msHacer, triangulosLejos: LN * LN * 2, triangulosFuera: trisFuera, radioCerca: Math.round(radioHecho) }),
   };
 }
 export { radioBorde };

@@ -17,6 +17,7 @@ const CORRER = { v: 1.8, escala: 1.8 / 1.37 };
 const RADIO = 0.24;            // planta del 18 para los choques (la capa abierta mide ~0,5 m)
 const GRAVEDAD = 9.8;
 const SALTO_V = 3.3;           // m/s hacia arriba: ~0,55 m de salto
+const ESCALON = 0.3;           // lo que se sube andando (cajas con ytop)
 const GESTOS = { 1: 'saludar', 2: 'mirar_arriba', 3: 'respingo', 4: 'bajar' };
 const PIERNAS = [['thigh_l', 'calf_l', 'foot_l', 'ball_l'], ['thigh_r', 'calf_r', 'foot_r', 'ball_r']];
 
@@ -165,6 +166,9 @@ export function cargarHeroe(scene, mundo) {
       if (d < m && d > 1e-6) { p.x = c.x + dx / d * m; p.z = c.z + dz / d * m; }
     }
     for (const b of mundo.choques.cajas) {
+      // una caja con `ytop` se pisa (muro4: el pie de la T, los trastos del saltadero): por encima de su tapa no choca, y
+      // andando se sube sola si no pasa de un escalon (30 cm)
+      if (b.ytop != null && H.pos.y >= b.ytop - (H.suelo ? ESCALON : 0.03)) continue;
       const ca = Math.cos(b.ang), sa = Math.sin(b.ang);
       const lx = (p.x - b.x) * ca + (p.z - b.z) * sa, lz = -(p.x - b.x) * sa + (p.z - b.z) * ca;
       const cx = Math.max(-b.hx, Math.min(b.hx, lx)), cz = Math.max(-b.hz, Math.min(b.hz, lz));
@@ -234,6 +238,8 @@ export function cargarHeroe(scene, mundo) {
         if (H.vy < -1) H.caida = { n: (H.caida ? H.caida.n : 0) + 1, x: H.pos.x, z: H.pos.z, v: -H.vy };
         H.pos.y = hs; H.vy = 0; H.suelo = true;
       }
+    } else if (hs - H.pos.y > 0.05) {
+      H.pos.y += (hs - H.pos.y) * Math.min(1, 22 * dt);     // un escalon: sube en un par de fotogramas, sin salto
     } else {
       H.pos.y = hs;
     }

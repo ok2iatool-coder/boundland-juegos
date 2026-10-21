@@ -215,7 +215,8 @@ export function crearSonido(base = 'sonidos/', opciones = {}) {
     if (encendido) ambiente();
     if (!heroe || !heroe.listo || !heroe.contactos) return;
     const sup = (x, z) => (mundo.superficie ? mundo.superficie(x, z) : 'hierba');
-    const v = heroe.vel ? Math.hypot(heroe.vel.x, heroe.vel.z) : 0;
+    // la velocidad del 18 es un Vector2 (x, y = z del mundo): con .z salia NaN y los pasos no sonaban nunca
+    const v = heroe.vel ? Math.hypot(heroe.vel.x, heroe.vel.y) : 0;
     const m = cam ? cam.matrixWorld.elements : null;
     const dx = m ? m[0] : 1, dz = m ? m[2] : 0;
     const dCam = m ? Math.hypot(heroe.pos.x - m[12], heroe.pos.y - m[13], heroe.pos.z - m[14]) : 4;

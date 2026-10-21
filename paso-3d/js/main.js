@@ -13,6 +13,8 @@ import { crearMundo3D } from './mundo3d.js';
 import { cargarHeroe } from './heroe.js';
 import { crearSonido } from './sonido.js';
 import { crearCarton18, CAPA18 } from './carton18.js';
+import { crearFocos } from './focos.js';
+import { crearNiebla } from './niebla.js';
 import { hash } from './tinta.js';
 
 const qs = new URLSearchParams(location.search);
@@ -54,27 +56,49 @@ const rtPeque = new THREE.WebGLRenderTarget(32, 32, { type: THREE.HalfFloatType 
 // el pase final lo pone encima de la raya y las bandas: el 18 no se corta nunca (carton18.js)
 // y con su profundidad, como el mundo: en el 3D el pase final lo pone solo donde esta delante (el bidon lo tapa)
 const rt18 = new THREE.WebGLRenderTarget(16, 16, { samples: 4, type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(16, 16) });
+// EL HAZ DE LOS FOCOS (focos.js), a media resolucion: lee la profundidad del mundo de rt y el pase final lo suma al 3D
+const rtHaz = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, depthBuffer: false });
+let focos = null;
+// LA NEBLINA (niebla.js), a media resolucion: rgb = la luz que dispersa, a = la transmitancia
+const rtNiebla = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType, depthBuffer: false });
+let niebla = null;
 
 // el pase final: mezcla, rayas, bandas, vineta fria centrada en el 18 y grano (estilo del despertar del juego)
 const comp = new THREE.ShaderMaterial({
   uniforms: {
-    t2D: { value: tex2D }, t3D: { value: rt.texture }, t18: { value: rt18.texture }, uUsa18: { value: 0 }, tProf3: { value: rt.depthTexture }, tProf18: { value: rt18.depthTexture }, uProf: { value: 0 }, uLineal: { value: MODO.texLineal ? 1 : 0 }, uUsa2D: { value: 1 }, uUsa3D: { value: 0 },
+    t2D: { value: tex2D }, t3D: { value: rt.texture }, t18: { value: rt18.texture }, uUsa18: { value: 0 }, tHaz: { value: rtHaz.texture }, uHaz: { value: 0 }, tNiebla: { value: rtNiebla.texture }, uNieb: { value: 0 }, uResN: { value: new THREE.Vector2(1, 1) }, uNear3: { value: 0.1 }, uFar3: { value: 100 }, tProf3: { value: rt.depthTexture }, tProf18: { value: rt18.depthTexture }, uProf: { value: 0 }, uLineal: { value: MODO.texLineal ? 1 : 0 }, uUsa2D: { value: 1 }, uUsa3D: { value: 0 },
     uMezcla: { value: 0 }, uRaya: { value: 0 }, uBandas: { value: 0 }, uTiempo: { value: 0 }, uNegro: { value: 0 },
     uRes: { value: new THREE.Vector2(1, 1) }, uCentro: { value: new THREE.Vector2(0.5, 0.5) }, uVineta: { value: 1 }, uGrano: { value: 0.035 },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
   fragmentShader: /* glsl */`
-    uniform sampler2D t2D, t3D, t18, tProf3, tProf18; uniform float uUsa18, uProf, uLineal, uUsa2D, uUsa3D, uMezcla, uRaya, uBandas, uTiempo, uNegro, uVineta, uGrano;
+    uniform sampler2D t2D, t3D, t18, tProf3, tProf18, tHaz, tNiebla; uniform float uNieb, uNear3, uFar3; uniform vec2 uResN; uniform float uHaz, uUsa18, uProf, uLineal, uUsa2D, uUsa3D, uMezcla, uRaya, uBandas, uTiempo, uNegro, uVineta, uGrano;
     uniform vec2 uRes, uCentro;
     varying vec2 vUv;
     float h1(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
     float h2(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    // la neblina, de media resolucion a la entera mirando la profundidad: de los cuatro texeles de alrededor pesan los de
+    // profundidad parecida a la del pixel (si no, la neblina de detras se corre sobre una barandilla de delante)
+    float linZ(float d) { float z = d * 2.0 - 1.0; return 2.0 * uNear3 * uFar3 / (uFar3 + uNear3 - z * (uFar3 - uNear3)); }
+    vec4 nieblaEn(vec2 uv) {
+      vec2 p = uv * uResN - 0.5, f = fract(p), b = (floor(p) + 0.5) / uResN;
+      float z0 = linZ(texture2D(tProf3, uv).r);
+      vec4 s = vec4(0.0); float ws = 0.0;
+      for (int k = 0; k < 4; k++) {
+        vec2 o = vec2(float(k - (k / 2) * 2), float(k / 2)), uvk = b + o / uResN;
+        float zk = linZ(texture2D(tProf3, uvk).r);
+        float w = (o.x > 0.5 ? f.x : 1.0 - f.x) * (o.y > 0.5 ? f.y : 1.0 - f.y) / (0.002 + abs(zk - z0) / max(z0, 0.1));
+        s += texture2D(tNiebla, uvk) * w; ws += w;
+      }
+      return s / max(ws, 1e-6);
+    }
+    vec4 NB = vec4(0.0, 0.0, 0.0, 1.0);
     vec3 leer(vec2 uv, float capa) {
       uv = clamp(uv, vec2(0.0005), vec2(0.9995));
       vec3 a = uUsa2D > 0.5 ? texture2D(t2D, uv).rgb : vec3(0.0);
       // el lienzo 2D se sube tal cual (RGBA8) y se pasa a lineal aqui: subirlo a una textura sRGB costaba 15 ms de GPU
       if (uLineal > 0.5) a = mix(a / 12.92, pow((a + 0.055) / 1.055, vec3(2.4)), step(0.04045, a));
-      vec3 b = uUsa3D > 0.5 ? texture2D(t3D, uv).rgb : vec3(0.0);
+      vec3 b = uUsa3D > 0.5 ? (texture2D(t3D, uv).rgb * NB.a + NB.rgb) + texture2D(tHaz, uv).rgb * uHaz : vec3(0.0);
       return mix(a, b, capa);
     }
     void main() {
@@ -91,6 +115,7 @@ const comp = new THREE.ShaderMaterial({
       float otra = step(1.0 - uBandas, h1(banda * 5.7 + tq * 3.3 + 1.0));
       float capa = clamp(uMezcla + otra * (uMezcla < 0.5 ? 1.0 : -1.0), 0.0, 1.0);
       float sep = 0.0042 * g + 0.0016 * otra;
+      if (uNieb > 0.5 && uUsa3D > 0.5) NB = nieblaEn(clamp(uv, vec2(0.0005), vec2(0.9995)));
       vec3 c = vec3(leer(uv + vec2(sep, 0.0), capa).r, leer(uv, capa).g, leer(uv - vec2(sep, 0.0), capa).b);
       // rayas: hilos claros horizontales y alguna vertical de pelicula
       c += step(0.993, h2(vec2(floor(vUv.y * uRes.y * 0.5), tq))) * g * 0.3;
@@ -130,7 +155,8 @@ function encajar() {
   W = v.x; H = v.y;
   lienzo.width = W; lienzo.height = H;
   tex2D.dispose();                          // nuevo tamano: la textura se vuelve a crear
-  rt.setSize(W, H); rt18.setSize(W, H);
+  rt.setSize(W, H); rt18.setSize(W, H); rtHaz.setSize(Math.ceil(W / 2), Math.ceil(H / 2)); rtNiebla.setSize(Math.ceil(W / 2), Math.ceil(H / 2));
+  comp.uniforms.uResN.value.set(Math.ceil(W / 2), Math.ceil(H / 2));
   cam3.aspect = W / H; cam3.updateProjectionMatrix();
   comp.uniforms.uRes.value.set(W, H);
   if (plano) plano.redimensionar(W, H);
@@ -140,6 +166,8 @@ function encajar() {
 const sonido = crearSonido();
 let sprites = null, plano = null, heroe = null, carton = null, tresListo = false, calentando = false;
 const mundo = crearMundo3D(escena3);
+focos = crearFocos(escena3, mundo.muro.focos);
+niebla = crearNiebla({ ambiente: new THREE.Color('#717e8c'), luces: mundo.lucesNiebla });
 const C = { yaw: 0, pitch: 0, dist: 3.4, fov: D.FOV0, foco: new THREE.Vector3(), libre: false, tLibre: 0 };
 
 function empezarHeroe() {
@@ -211,6 +239,8 @@ async function calentar() {
   grupos.forEach((g) => { g.visible = false; });
   tc = performance.now();
   renderer.setRenderTarget(rt); renderer.render(escena3, cam3); renderer.setRenderTarget(null);
+  if (focos) focos.pintar(renderer, cam3, rtHaz, rt.depthTexture);       // compila el haz aqui y no al salir
+  if (niebla) { niebla.actualizar(0, cam3, 1); niebla.pintar(renderer, rtNiebla, rt.depthTexture); }   // y la neblina
   MED.eventos.push({ n: 'pintarRT', ms: +(performance.now() - tc).toFixed(1) });
   cam3.layers.set(CAPA18); renderer.setRenderTarget(rt18); renderer.render(escena3, cam3); renderer.setRenderTarget(null); cam3.layers.set(0);
   await fotogramaSig();
@@ -618,9 +648,23 @@ function dibujar(ultimo) {
     mundo.actualizar(E.t, 1 / 60, heroe, cam3, E);
     mundo.muro.actualizar(E.t);
     cam3.layers.set(0);
+    if (focos) focos.actualizar(E.t, cam3, mundo.niebla.density, H);
     renderer.setRenderTarget(rt);
     renderer.render(escena3, cam3);
     renderer.setRenderTarget(null);
+    // el haz de los focos: solo fuera del conducto (dentro no se ve nada de fuera y no se paga)
+    const verHaz = !!focos && E.exterior > 0.02;
+    if (verHaz) focos.pintar(renderer, cam3, rtHaz, rt.depthTexture);
+    comp.uniforms.uHaz.value = verHaz ? 1 : 0;
+    // la neblina: tambien solo fuera, y entra con la misma niebla que la del mundo (E.niebla, al girar la camara)
+    const verNiebla = !!niebla && E.exterior > 0.02 && E.niebla > 0.001;
+    if (verNiebla) {
+      niebla.actualizar(E.t, cam3, E.niebla * E.exterior);
+      niebla.luz(mundo.lucesNiebla.findIndex((l) => l.p === mundo.luces.farola.position), 0.25 * mundo.luces.farola.intensity / 7);   // la farola tiembla
+      niebla.pintar(renderer, rtNiebla, rt.depthTexture);
+    }
+    comp.uniforms.uNieb.value = verNiebla ? 1 : 0;
+    comp.uniforms.uNear3.value = cam3.near; comp.uniforms.uFar3.value = cam3.far;
     f.c3 = performance.now() - t1;
   }
   if (capa18) {

@@ -5,7 +5,7 @@ Las versiones de desarrollo de Boundland (Milbit Estudios) para jugar en el nave
 
 | Carpeta | Qué es |
 |---|---|
-| `2d/` | El juego en 2D: once niveles |
+| `2d/` | El juego en 2D: doce niveles, compilado y optimizado por `construir_2d.mjs` |
 | `3d/` | El Sujeto 18 en 3D (`?mapa=mundo`, `?mapa=terreno`) |
 | `paso-3d/` | Prueba del paso de 2D a 3D |
 | `base/` | Prueba de la base de refugiados en 2.5D |

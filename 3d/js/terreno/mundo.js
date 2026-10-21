@@ -86,6 +86,7 @@ export function crearMundo(scene) {
     R.limitar(p);
     H.pos.set(p.x, R.altura(p.x, p.z), p.z);
     H.vel.set(0, 0); H.vy = 0; H.suelo = true;
+    if (H.reiniciarCuerpo) H.reiniciarCuerpo();
     if (enlaces.camara) enlaces.camara.lista = false;             // la camara salta con el (si no, cruzaria el mapa)
     hierba.actualizar(ultimoT, H.pos, H, 0, true);                // la hierba de alrededor, ya hecha al llegar
     // (la capa del 18 se recoloca sola: tela.js reinicia si la pelvis salta mas de 1 m)

@@ -1,7 +1,7 @@
 // FISICA de la capa y de la punta de la capucha del 18, en tiempo real, como MALLA DE TELA (20-10): mas particulas
-// que huesos. Como en el video de referencia: al correr la capa vuela hacia atras como una bandera, ondea con cada paso,
-// cae al pararse y se APOYA en los brazos cuando los mueve (los brazos van libres por debajo, no la atraviesan), y por
-// detras sale de debajo de la mochila.
+// que huesos. La capa CUELGA por su peso en su sitio del clip (21-10: sin la pose de arrastre que la abria hacia atras
+// al correr), el aire empuja solo la cara que va contra el (AIRE_K), ondea con cada paso, se APOYA en los brazos cuando
+// los mueve (los brazos van libres por debajo, no la atraviesan), y por detras sale de debajo de la mochila.
 //
 // La capa es una REJILLA de 7 columnas (una por cadena de huesos del .glb: cape_fl, l, bl, b, br, r, fr) y 7 filas (cada
 // eslabon de hueso partido en SUB particulas). Cada particula (Verlet) siente gravedad, aire y un MUELLE-AMORTIGUADOR
@@ -21,8 +21,10 @@ const G = new THREE.Vector3(0, -9.8, 0);
 
 // parametros de la tela (por cadena): gravedad (escala), aire (1/s), muelle a la pose del clip (1/s, por eslabon de
 // hueso), amortiguado
+// (la capa tenia aire 9: un freno igual en todas direcciones que, corriendo, la empujaba ~20 m/s2 hacia atras, el doble
+// de la gravedad, tambien a los panos de los lados. Ahora el aire va aparte, por la cara de la tela: AIRE_K)
 const AJUSTE = {
-  capa: { g: 1.0, aire: 9, muelle: [5, 1.6, 0.8], amort: 0.02 },
+  capa: { g: 1.0, aire: 0.8, muelle: [5, 1.6, 0.8], amort: 0.02 },
   capucha: { g: 0.25, aire: 1.2, muelle: [40, 28, 20], amort: 0.06 },
 };
 // particulas por eslabon de hueso (la capucha sigue siendo una cadena)
@@ -47,12 +49,15 @@ const DOBLEZ_EXTRA = 0.6;
 const RECUPERA = 6, RECUPERA_D = 0.15;
 // cuanto puede girar cada pano alrededor del cuerpo desde su raiz (rad)
 const SECTOR = { cape_fl: 2.0, cape_fr: 2.0, cape_l: 1.75, cape_r: 1.75, cape_bl: 1.3, cape_b: 1.3, cape_br: 1.3 };
-// AL CORRER la capa se ABRE (pedido del usuario el 20-10): el muelle de cada pano tira hacia una pose de ARRASTRE
-// (hacia atras, un pelo hacia su lado y algo hacia abajo), tanto mas cuanto mas deprisa
-const ABRE = { cape_fl: 1, cape_fr: 1, cape_l: 0.85, cape_r: 0.85, cape_bl: 0.25, cape_br: 0.25, cape_b: 0 };
-const ABRE_V0 = 0.5, ABRE_V1 = 1.5;   // velocidad (m/s) a la que empieza a abrirse y a la que se abre entera
-const GIRO_RUMBO = 7;                 // rad/s: lo mas deprisa que gira la direccion de arrastre (veleta)
-const ABRE_LADO = 0.15, ABRE_CAIDA = 0.3;   // (0,45 con la malla: la capa corriendo se quedaba 6 cm mas cerca del cuerpo)
+// AIRE DE VERDAD (2026-10-21, "quitalo, tiene que ser plano, normal, fisicas mas realistas"): antes, al correr, cada
+// pano tiraba hacia una pose de ARRASTRE (hacia atras y abierto, pedida el 20-10 para ver los brazos) y se liaba en los
+// brazos. Ahora no hay pose: la capa cuelga por su peso en su sitio del clip y el aire empuja solo la CARA de la tela
+// que va contra el, al cuadrado de la velocidad: a = 0,5·rho·Cd·v²/sigma por la normal. Con aire 1,2 kg/m3, Cd 1,2 de
+// placa plana y lona de 0,36 kg/m2, AIRE_K = 2 1/m: corriendo a 1,8 m/s el pano de atras siente 6,5 m/s2 hacia atras
+// (se levanta un poco), los de delante lo mismo contra el pecho (se pegan) y los de los lados casi nada (el aire les
+// pasa de canto). La normal de cada particula: horizontal, de la columna a su sitio del clip
+const AIRE_K = 2.0, AIRE_MAX = 20;
+const ABRE_V0 = 0.5, ABRE_V1 = 1.5;   // solo para `corre` (0 parado .. 1 corriendo), que leen las medidas
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3();
 const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
@@ -138,6 +143,7 @@ export function crearTela(raiz, altura, mapa = null) {
       if (d < m && d > 1e-6) { p.x = c.x + dx / d * m; p.z = c.z + dz / d * m; }
     }
     for (const b of cerca.cajas) {
+      if (b.ytop != null && p.y >= b.ytop) continue;          // las que se pisan: por encima, la sostiene el suelo
       const ca = Math.cos(b.ang), sa = Math.sin(b.ang);
       const lx = (p.x - b.x) * ca + (p.z - b.z) * sa, lz = -(p.x - b.x) * sa + (p.z - b.z) * ca;
       const hx = b.hx + MARGEN, hz = b.hz + MARGEN;
@@ -150,25 +156,7 @@ export function crearTela(raiz, altura, mapa = null) {
   }
 
   let iniciada = false, resto = 0, quieto = 1, corre = 0;
-  const marcha = new THREE.Vector3(), rumbo = new THREE.Vector3(0, 0, 1), lado = new THREE.Vector3(), arr = new THREE.Vector3();
-  // la pose de ARRASTRE de cada pano: desde su raiz, la columna estirada hacia atras, hacia su lado y algo hacia abajo,
-  // mezclada con la del clip segun lo que se corre (T, la meta del muelle)
-  function poseArrastre(eje) {
-    for (const c of cadenas) {
-      if (c.tipo !== 'capa') continue;
-      const w = ABRE[c.nombre] || 0;
-      c.abre = OPC.abre === false ? 0 : corre * w;
-      if (c.abre <= 0) continue;
-      // su lado: de la columna a su raiz, sin la componente de la marcha
-      lado.set(c.R[0].x - eje.x, 0, c.R[0].z - eje.z);
-      lado.addScaledVector(rumbo, -lado.dot(rumbo));
-      if (lado.lengthSq() < 1e-8) lado.set(-rumbo.z, 0, rumbo.x);
-      lado.normalize();
-      arr.copy(rumbo).multiplyScalar(-1).addScaledVector(lado, OPC.lado ?? ABRE_LADO).addScaledVector(Y, -(OPC.caida ?? ABRE_CAIDA)).normalize();
-      c.T[0].copy(c.R[0]);
-      for (let j = 1; j < c.n; j++) c.T[j].copy(c.R[0]).addScaledVector(arr, c.largo[j]).lerp(c.R[j], 1 - c.abre);
-    }
-  }
+  const marcha = new THREE.Vector3(), eje = new THREE.Vector3();
   const ultimo = new THREE.Vector3();
 
   // la pose del clip: las cabezas de los huesos (A) y, a lo largo de cada eslabon, el sitio de cada fila (R)
@@ -194,7 +182,7 @@ export function crearTela(raiz, altura, mapa = null) {
 
   function reiniciar() {
     for (const c of cadenas) for (let j = 0; j < c.n; j++) { c.X[j].copy(c.R[j]); c.Q[j].copy(c.R[j]); c.Rp[j].copy(c.R[j]); c.M[j].copy(c.R[j]); c.Mp[j].copy(c.R[j]); c.V[j].set(0, 0, 0); c.Vf[j].set(0, 0, 0); c.Vp[j].set(0, 0, 0); }
-    corre = 0; quieto = 1; rumbo.set(0, 0, 1); resto = 0;     // todo el estado, no solo las particulas (pruebas repetibles)
+    corre = 0; quieto = 1; resto = 0;     // todo el estado, no solo las particulas (pruebas repetibles)
     pelPrev = null;
     iniciada = true;
   }
@@ -456,7 +444,7 @@ export function crearTela(raiz, altura, mapa = null) {
     for (const c of cadenas) {
       const A = AJUSTE[c.tipo];
       c.X[0].copy(c.R[0]); c.Q[0].copy(c.R[0]);
-      const abre = c.abre || 0;
+      const caras = c.tipo === 'capa' && c.N;
       for (let j = 1; j < c.n; j++) {
         const p = c.X[j], q = c.Q[j];
         // MUELLE-AMORTIGUADOR hacia su sitio: aceleracion = gravedad + K (sitio - p) - amortiguado de la velocidad
@@ -465,7 +453,7 @@ export function crearTela(raiz, altura, mapa = null) {
         // tiembla mas cuanto mas sube la frecuencia. RECUPERACION: parado y lejos de su sitio tira hasta x RECUPERA
         const meta = c.M[j];
         const lejos = Math.min(1, p.distanceTo(meta) / RECUPERA_D);
-        const fuerza = A.muelle[Math.floor((j - 1) / c.S)] * (1 + 2.5 * abre) * (1 + (RECUPERA - 1) * lejos * lejos * quieto);
+        const fuerza = A.muelle[Math.floor((j - 1) / c.S)] * (1 + (RECUPERA - 1) * lejos * lejos * quieto);
         const K = fuerza * 120 * OPC.kMul;
         const Cc = 2 * OPC.zeta * Math.sqrt(K);
         const aire = A.aire + A.amort * 120;
@@ -474,6 +462,11 @@ export function crearTela(raiz, altura, mapa = null) {
         vI.subVectors(p, q).divideScalar(dt);
         vM.copy(OPC.relativo === 'pelvis' ? c.Vp[j] : OPC.relativo ? c.V[j] : v3.set(0, 0, 0)).sub(c.Vf[j]);
         aI.copy(G).multiplyScalar(A.g).addScaledVector(v2.subVectors(meta, p), K).addScaledVector(vM, Cc).addScaledVector(c.Vf[j], -aire);
+        // el aire por la cara (AIRE_K): con la velocidad de la particula entera (la suya y la que le da la pelvis)
+        if (caras) {
+          const n = c.N[j], s = (vI.x + c.Vf[j].x) * n.x + (vI.z + c.Vf[j].z) * n.z;
+          aI.addScaledVector(n, -Math.max(-AIRE_MAX, Math.min(AIRE_MAX, AIRE_K * s * Math.abs(s))));
+        }
         vI.addScaledVector(aI, dt).divideScalar(1 + dt * (Cc + aire));
         q.copy(p);
         p.addScaledVector(vI, dt);
@@ -817,6 +810,7 @@ export function crearTela(raiz, altura, mapa = null) {
     for (let k = 0; k < lazos.length; k++) { const [a, ja, b, jb] = lazos[k]; reposo[k] = a.R[ja].distanceTo(b.R[jb]); }
     // reinicio si el heroe salta de sitio (teletransporte de prueba) o al empezar
     cabeza(espalda, v1);
+    eje.copy(v1);
     if (mapa) {
       const R = 1.6;
       cerca = {
@@ -831,22 +825,18 @@ export function crearTela(raiz, altura, mapa = null) {
     quieto += ((1 - Math.min(1, vel / 0.3)) - quieto) * Math.min(1, 4 * dt);
     marcha.set(v1.x - ultimo.x, 0, v1.z - ultimo.z);
     const vh = marcha.length() / Math.max(dt, 1e-3);
-    // el rumbo GIRA como una veleta hacia la marcha, como mucho a GIRO_RUMBO rad/s (mezclarlos pasaba por cero en una
-    // media vuelta y la direccion de arrastre salia disparada: los panos se cruzaban y ensenaban el enves)
-    if (vh > 0.2) {
-      const a0 = Math.atan2(rumbo.x, rumbo.z), a1 = Math.atan2(marcha.x, marcha.z);
-      let d = a1 - a0; d = Math.atan2(Math.sin(d), Math.cos(d));
-      const p = Math.max(-GIRO_RUMBO * dt, Math.min(GIRO_RUMBO * dt, d));
-      rumbo.set(Math.sin(a0 + p), 0, Math.cos(a0 + p));
-    }
     const meta = Math.max(0, Math.min(1, (vh - ABRE_V0) / (ABRE_V1 - ABRE_V0)));
     corre += (meta - corre) * Math.min(1, (meta > corre ? 3.5 : 1.8) * dt);
     ultimo.copy(v1);
-    poseArrastre(v1);
-    // la META de cada particula (su sitio del clip o, corriendo, el de arrastre) y su velocidad: el amortiguado mira esa
-    // (con la del clip a secas, al abrirse la capa corriendo la meta se va por un lado y el freno tira por otro)
+    // la META de cada particula: su sitio del clip. Y su NORMAL para el aire: horizontal, de la columna a ese sitio
     for (const c of cadenas) for (let j = 0; j < c.n; j++) {
-      c.M[j].copy((c.abre || 0) > 0 ? c.T[j] : c.R[j]);
+      c.M[j].copy(c.R[j]);
+      if (c.tipo === 'capa') {
+        c.N = c.N || c.R.map(() => new THREE.Vector3());
+        c.N[j].set(c.R[j].x - eje.x, 0, c.R[j].z - eje.z);
+        const l = c.N[j].length();
+        if (l > 1e-4) c.N[j].divideScalar(l); else c.N[j].set(0, 0, 0);
+      }
       c.V[j].subVectors(c.M[j], c.Mp[j]).divideScalar(Math.max(dt, 1e-3));
       if (c.V[j].lengthSq() > 100 || OPC.velClip) c.V[j].subVectors(c.R[j], c.Rp[j]).divideScalar(Math.max(dt, 1e-3));
       if (c.V[j].lengthSq() > 100) c.V[j].set(0, 0, 0);

@@ -431,11 +431,77 @@ export function crearMundo3D(scene) {
     for (const [h, g] of [[alto, 0.05], [alto * 0.52, 0.035]]) barra('acero', V(ax, y + h, az), V(bx, y + h, bz), g, { tinta: 0.01 });
     caja('aceroOsc', (ax + bx) / 2, y + 0.075, (az + bz) / 2, L, 0.13, 0.012, { q: qL, tinta: 0.004 });          // rodapie de chapa
   }
-  // un aplique de pasarela en un poste, mirando a dentro (sz = -1 / +1: hacia -z / +z)
+  // un APLIQUE ESTANCO de obra en un poste de la barandilla, mirando a dentro (sz = -1 / +1: hacia -z / +z). Antes era
+  // una caja oscura con un rectangulo ambar; ahora: dos abrazaderas al poste con sus tornillos, la placa, el cuerpo
+  // redondo de fundicion con aletas, el aro que aprieta el cristal con cuatro tornillos, el cristal abombado (mas claro
+  // en el centro, donde esta la lampara), la rejilla de proteccion, la visera, el prensaestopas y el tubo flexible hasta
+  // una caja de derivacion en la canalizacion de la pasarela; y su halo en la bruma
+  const LENTES = [], HALOS = [];
+  const cLuz = new THREE.Color('#fff1d6'), cBorde = new THREE.Color('#d9934a');
   function farol(x, y, z, sz) {
-    cajaE('aceroOsc', x - 0.06, x + 0.06, y + 0.74, y + 0.9, z + sz * 0.02, z + sz * 0.1, { tinta: 0.006 });
-    cajaE('ambar', x - 0.045, x + 0.045, y + 0.76, y + 0.84, z + sz * 0.1, z + sz * 0.105, { tinta: 0 });
-    cajaE('aceroOsc', x - 0.065, x + 0.065, y + 0.9, y + 0.92, z + sz * 0.02, z + sz * 0.13, { tinta: 0 });     // visera
+    const yc = y + 0.82, zp = z + sz * 0.0225;                 // centro del aplique y cara de dentro del poste
+    const Z = (d) => z + sz * d;                               // a d metros del eje del poste, hacia dentro
+    // abrazaderas: un collar cuadrado arriba y otro abajo, con los dos tornillos que lo aprietan por detras
+    for (const yy of [yc - 0.055, yc + 0.055]) {
+      cajaE('aceroOsc', x - 0.034, x + 0.034, yy - 0.011, yy + 0.011, Math.min(Z(-0.034), Z(-0.0225)), Math.max(Z(-0.034), Z(-0.0225)), { tinta: 0.003 });
+      cajaE('aceroOsc', x - 0.034, x - 0.0225, yy - 0.011, yy + 0.011, z - 0.034, z + 0.034, { tinta: 0.003 });
+      cajaE('aceroOsc', x + 0.0225, x + 0.034, yy - 0.011, yy + 0.011, z - 0.034, z + 0.034, { tinta: 0.003 });
+      for (const dx of [-0.026, 0.026]) cilindro('acero', V(x + dx, yy, Z(-0.034)), V(x + dx, yy, Z(-0.05)), 0.006, 6, 0);
+    }
+    // la placa de montaje y el cuerpo de fundicion con sus aletas de enfriar
+    cajaE('aceroOsc', x - 0.052, x + 0.052, yc - 0.085, yc + 0.085, Math.min(zp, Z(0.036)), Math.max(zp, Z(0.036)), { tinta: 0.004 });
+    cilindro('acero', V(x, yc, Z(0.036)), V(x, yc, Z(0.078)), 0.072, 18, 0.004);
+    for (let k = 0; k < 8; k++) {
+      const a = k / 8 * Math.PI * 2, c = Math.cos(a), s = Math.sin(a);
+      barra('acero', V(x + c * 0.074, yc + s * 0.074, Z(0.04)), V(x + c * 0.074, yc + s * 0.074, Z(0.07)), 0.007, { tinta: 0 });
+    }
+    // el aro que aprieta el cristal y sus cuatro tornillos
+    meter('aceroOsc', new THREE.TorusGeometry(0.064, 0.0085, 6, 22).translate(x, yc, Z(0.08)));
+    for (let k = 0; k < 4; k++) {
+      const a = Math.PI / 4 + k * Math.PI / 2;
+      cilindro('acero', V(x + Math.cos(a) * 0.064, yc + Math.sin(a) * 0.064, Z(0.084)), V(x + Math.cos(a) * 0.064, yc + Math.sin(a) * 0.064, Z(0.092)), 0.0055, 6, 0);
+    }
+    // el cristal: media esfera aplastada con el color por vertice (claro en el centro, ambar en el borde)
+    const g = new THREE.SphereGeometry(0.058, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    g.scale(1, 0.55, 1).rotateX(sz > 0 ? Math.PI / 2 : -Math.PI / 2).translate(x, yc, Z(0.079));
+    const p = g.attributes.position, col = new Float32Array(p.count * 3), c = new THREE.Color();
+    for (let i = 0; i < p.count; i++) {
+      const rr = Math.hypot(p.getX(i) - x, p.getY(i) - yc) / 0.058;
+      c.copy(cLuz).lerp(cBorde, Math.min(1, rr * rr * 1.1));
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    LENTES.push(g.toNonIndexed());
+    // la rejilla: dos arcos que cruzan el cristal y otro aro mas pequeno
+    for (const [ux, uy] of [[1, 0], [0, 1]]) {
+      const pts = [];
+      for (let k = 0; k <= 6; k++) {
+        const t = -1 + k / 3, d = 0.058 * t;
+        pts.push(V(x + ux * d, yc + uy * d, Z(0.08 + 0.038 * Math.sqrt(Math.max(0, 1 - t * t)) + 0.004)));
+      }
+      for (let k = 0; k < pts.length - 1; k++) cilindro('aceroOsc', pts[k], pts[k + 1], 0.0032, 5, 0);
+    }
+    meter('aceroOsc', new THREE.TorusGeometry(0.036, 0.003, 4, 18).translate(x, yc, Z(0.112)));
+    // la visera que vuela sobre el cristal
+    cajaE('aceroOsc', x - 0.078, x + 0.078, yc + 0.075, yc + 0.083, Math.min(Z(0.03), Z(0.125)), Math.max(Z(0.03), Z(0.125)), { tinta: 0.003 });
+    for (const dx of [-0.078, 0.074]) cajaE('aceroOsc', x + dx, x + dx + 0.004, yc + 0.045, yc + 0.083, Math.min(Z(0.05), Z(0.125)), Math.max(Z(0.05), Z(0.125)), { tinta: 0 });
+    // prensaestopas abajo y el tubo flexible hasta la caja de derivacion de la canalizacion (en x + 0.16, por fuera)
+    cilindro('aceroOsc', V(x, yc - 0.068, Z(0.055)), V(x, yc - 0.095, Z(0.055)), 0.012, 8, 0.003);
+    cilindro('acero', V(x, yc - 0.095, Z(0.055)), V(x, yc - 0.104, Z(0.055)), 0.015, 6, 0);
+    const zc = z + (z > 0 ? 0.06 : -0.06);                       // la canalizacion va por fuera de los postes
+    cajaE('aceroOsc', x + 0.11, x + 0.21, 0.78, 0.86, zc - 0.035, zc + 0.035, { tinta: 0.004 });
+    cajaE('acero', x + 0.115, x + 0.205, 0.86, 0.866, zc - 0.03, zc + 0.03, { tinta: 0 });            // su tapa
+    const a = V(x, yc - 0.104, Z(0.055)), b = V(x + 0.16, 0.78, zc), m1 = V(x + 0.02, yc - 0.2, Z(0.04)), m2 = V(x + 0.15, 0.68, zc);
+    // donde no hay canalizacion (la plataforma del final), el cable sube de debajo de la rejilla por otro tubo
+    if (!(x > 22.3 && x < 33.9 && Math.abs(Math.abs(z) - 0.75) < 0.01)) cilindro('aceroOsc', V(x + 0.16, 0.78, zc), V(x + 0.16, 0.0, zc), 0.011, 6, 0.003);
+    let prev = a;
+    for (let k = 1; k <= 8; k++) {
+      const t = k / 8, u = 1 - t;
+      const q = a.clone().multiplyScalar(u * u * u).addScaledVector(m1, 3 * u * u * t).addScaledVector(m2, 3 * u * t * t).addScaledVector(b, t * t * t);
+      cilindro('cuerda', prev, q, 0.0075, 6, 0);
+      prev = q;
+    }
+    HALOS.push(V(x, yc, Z(0.13)));
   }
   // torre de celosia que baja hasta perderse en la bruma
   function torre(x0, x1, z0, z1, ytop, ybot = D.SUELO_Y) {
@@ -556,6 +622,23 @@ export function crearMundo3D(scene) {
 
   // ---------------------------------------------------------------- mallas
   const mallas = {};
+  // los cristales de los apliques (con su color por vertice, que los lotes no llevan) y su halo en la bruma
+  if (LENTES.length) {
+    const ml = new THREE.Mesh(mergeGeometries(LENTES), new THREE.MeshBasicMaterial({ vertexColors: true }));
+    ml.name = 'lentesApliques';
+    scene.add(ml);
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+    const cx = cv.getContext('2d'), gr = cx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,236,200,1)'); gr.addColorStop(0.12, 'rgba(255,214,160,.55)'); gr.addColorStop(0.4, 'rgba(255,190,130,.14)'); gr.addColorStop(1, 'rgba(255,180,120,0)');
+    cx.fillStyle = gr; cx.fillRect(0, 0, 128, 128);
+    const tHalo = new THREE.CanvasTexture(cv); tHalo.colorSpace = THREE.SRGBColorSpace;
+    const mHalo = new THREE.SpriteMaterial({ map: tHalo, color: '#ffcf96', transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
+    for (const pos of HALOS) {
+      const s = new THREE.Sprite(mHalo);
+      s.position.copy(pos); s.scale.set(0.62, 0.62, 1); s.renderOrder = 5;
+      scene.add(s);
+    }
+  }
   for (const [k, gs] of Object.entries(lotes)) {
     const g = mergeGeometries(gs.map(limpia));
     const m = new THREE.Mesh(g, M[k]);
@@ -598,12 +681,14 @@ export function crearMundo3D(scene) {
   cielo.frustumCulled = false;
   scene.add(cielo);
   const brumas = [];
-  // capas finas: juntas tapaban la mitad del suelo y los 35 m de caida no se leian
+  // (las cuatro capas de bruma eran planos con un alfa que se deslizaba: ahora la neblina es un medio, niebla.js; se
+  // dejan creadas pero ocultas para compararlas)
   for (const [y, o, rep] of [[-7, 0.07, 6], [-15, 0.09, 4], [-24, 0.1, 3], [-31, 0.06, 2]]) {
     const t = tBruma.clone(); t.repeat.set(rep, rep); t.needsUpdate = true;
     const b = new THREE.Mesh(new THREE.PlaneGeometry(420, 420).rotateX(-Math.PI / 2).translate(40, y, 0),
       new THREE.MeshBasicMaterial({ color: '#7d8894', alphaMap: t, transparent: true, opacity: o, depthWrite: false }));
     b.userData.v = 0.004 / rep;
+    b.visible = false;
     brumas.push(b); scene.add(b);
   }
   // motas que lleva el viento (solo fuera)
@@ -657,7 +742,7 @@ export function crearMundo3D(scene) {
     frente.position.x = f0; frente.scale.x = MX - f0;
     hemi.intensity = 1.5; sol.intensity = 1.9;
     cielo.material.uniforms.uLuz.value = 1;
-    niebla.density = E.niebla * 0.014;
+    niebla.density = E.niebla * 0.006;           // lo lejano; lo cercano lo hace la neblina (niebla.js)
     for (const b of brumas) { b.material.alphaMap.offset.x += b.userData.v * dt * 60; b.material.alphaMap.offset.y += b.userData.v * dt * 25; }
     // motas con el viento alrededor del 18
     motas.material.opacity = 0.55 * ext;
@@ -713,5 +798,14 @@ export function crearMundo3D(scene) {
   return {
     altura, choques, limitar, borde: 1e4, salida: { x: D.PASO.x, z: 0, giro: Math.PI / 2 },
     actualizar, reiniciar, pasoVision, tramos, tPintura, objetos, musgo, muro, enBase, M, mallas, luces: { hemi, sol, farola, luzHeroe }, pared, niebla, PISO,
+    // las que alumbran la neblina: los apliques de las barandillas, la farola, la caseta, el aplique de la salida y los
+    // tres apliques de debajo de la coronacion que se ven desde la base
+    lucesNiebla: [
+      ...HALOS.map((p) => ({ p, color: new THREE.Color('#ffcf96'), i: 0.05 })),
+      { p: farola.position, color: new THREE.Color('#ffd9a0'), i: 0.25 },
+      { p: luzCaseta.position, color: new THREE.Color('#ffd2a0'), i: 0.1 },
+      { p: muro.aplique.position, color: new THREE.Color('#ffd2a0'), i: 0.12 },
+      ...[-9, 0, 9].map((z) => ({ p: new THREE.Vector3(MX + 0.9, D.TOPE_Y - 0.9, z), color: new THREE.Color('#ffd8a8'), i: 0.04 })),
+    ],
   };
 }

@@ -9,6 +9,7 @@ import { TONO } from './tono.js';
 import { altura, azar, EXT } from './relieve.js';
 import { cubierta } from './sitios.js';
 import { colorHierba, COLOR } from './suelo.js';
+import { crearHierbaFina, ENTRA } from './hierba_fina.js';
 
 const CH = 20, SEP = 0.42;
 const LEJOS_FUNDE = [34, 46], CERCA_FUNDE = [18, 26], FLOR_FUNDE = [24, 32];
@@ -97,9 +98,11 @@ export function crearHierba({ grupo, camara = () => null }) {
     matojo: matojo(), espiga: espiga(),
     flores: [[0.93, 0.94, 0.95], [0.93, 0.8, 0.3], [0.62, 0.53, 0.78], [0.86, 0.66, 0.72]].map((p, i) => flor(p, i === 1 ? [0.8, 0.55, 0.2] : amarillo)),
   };
-  const pc = { porCamara: true };
+  // (21-10) alrededor del 18 va la hierba FINA de la parcela (hierba_fina.js): esta entra donde aquella se acaba
+  const pc = { porCamara: true, entra: ENTRA };
   const mat = { lejos: material(TONO, comunes, LEJOS_FUNDE, pc), cerca: material(TONO, comunes, CERCA_FUNDE, pc), espiga: material(TONO, comunes, CERCA_FUNDE, pc), flor: material(TONO, comunes, FLOR_FUNDE, pc), prado: materialPrado(comunes) };
   geo.prado = mataPrado();
+  const fina = crearHierbaFina({ grupo, comunes, tono: TONO });
   const _c = new THREE.Color(), mt = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), v3 = new THREE.Vector3(), sv = new THREE.Vector3();
   const cub = { mata: 0, alto: 1, flor: 0, florTipo: 0, seco: 0 };
 
@@ -235,6 +238,7 @@ export function crearHierba({ grupo, camara = () => null }) {
     }
     if (mejor) { trozos.set(mejor.k, hacer(mejor.i, mejor.j)); hechos++; }
     actualizarPrado(foco, forzar);
+    fina.actualizar(foco, forzar);
     for (const [k, t] of trozos) {
       const d = Math.hypot(Math.max(Math.abs(t.cx - foco.x) - CH / 2, 0), Math.max(Math.abs(t.cz - foco.z) - CH / 2, 0));
       if (d > TIRAR) { tirar(t); trozos.delete(k); continue; }
@@ -253,6 +257,7 @@ export function crearHierba({ grupo, camara = () => null }) {
   }
   // el editor: tirar los trozos que tocan un recuadro (se rehacen solos, el mas cercano primero, con el suelo nuevo)
   function tirarZona(x0, z0, x1, z1) {
+    fina.tirarZona(x0, z0, x1, z1);
     for (const [k, t] of trozos) {
       if (t.cx + CH / 2 < x0 || t.cx - CH / 2 > x1 || t.cz + CH / 2 < z0 || t.cz - CH / 2 > z1) continue;
       tirar(t);
@@ -266,7 +271,7 @@ export function crearHierba({ grupo, camara = () => null }) {
   return {
     actualizar, campo, uniformes: comunes, tirarZona,
     get trozos() { return [...trozos.values()]; },
-    info: () => ({ trozosHierba: trozos.size, trozosHechos: hechos, matas: [...trozos.values()].reduce((s, t) => s + t.n, 0), trozosPrado: prado.size, matasPrado }),
+    info: () => ({ ...fina.info(), trozosHierba: trozos.size, trozosHechos: hechos, matas: [...trozos.values()].reduce((s, t) => s + t.n, 0), trozosPrado: prado.size, matasPrado }),
   };
 }
 export { COLOR };

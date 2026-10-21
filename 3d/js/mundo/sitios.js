@@ -110,9 +110,12 @@ export function cubierta(x, z, out = _cub, m = null) {
     out.flor = M.flor ? 1 : (M.mata ? 0.03 : 0);
   }
   if (HUELLAS.length && enHuella(x, z)) { out.mata = 0; out.flor = 0; }
+  if (OBRA.ocupado && OBRA.ocupado(x, z)) { out.mata = 0; out.flor = 0; }
   return out;
 }
 
+// la OBRA de la ciudad (cimientos.js pone aqui su `ocupado`): ni hierba ni flores sobre losas, zanjas, plaza y calles
+export const OBRA = { ocupado: null };
 // las HUELLAS de los modelos solidos que pone el editor (modelos.js): { x, z, hx, hz, ang, r }
 export const HUELLAS = [];
 export function enHuella(x, z) {
