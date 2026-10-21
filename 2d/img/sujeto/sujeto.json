@@ -705,6 +705,21 @@
     92.54,
     363.5
    ]
+  },
+  "tropiezo": {
+   "fotogramas": 30,
+   "cols": 8,
+   "fps": 12,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    422,
+    418
+   ],
+   "pies": [
+    93.44,
+    378.0
+   ]
   }
  },
  "intro_encaje": {
