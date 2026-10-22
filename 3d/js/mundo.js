@@ -4,6 +4,10 @@
 // Devuelve la altura del suelo y los CHOQUES (circulos y cajas en planta) que usa el heroe.
 import * as THREE from 'three';
 import * as T from './texturas.js';
+import { crearVida, meceMaterial } from './bosque_vida.js';
+import { crearEmpedrado, levante } from './empedrado3d.js';
+import { crearRejilla, crearMascara, crearSuelo } from './suelo_bosque.js';
+import { crearHojarasca } from './hojarasca3d.js';
 
 export const LADO = 60;                       // el mapa va de -LADO a +LADO en X y Z (m)
 
@@ -12,7 +16,6 @@ const PUNTOS = [[-56, 22], [-42, 15], [-28, 18], [-14, 9], [-4, 2], [6, -2], [16
 const curva = new THREE.CatmullRomCurve3(PUNTOS.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
 const CAMINO = curva.getSpacedPoints(400);
 const ANCHO_CAMINO = 2.6;
-const PIEDRA = 1.5;            // m de camino por cada repeticion del empedrado (piedras de ~0,15 m, como en el video)
 
 export function distCamino(x, z) {
   let mejor = 1e9, t = 0;
@@ -29,13 +32,40 @@ export function distCamino(x, z) {
 
 const suave = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-// el suelo: lomas suaves que se aplanan junto al camino (el camino del video va casi a nivel)
-export function altura(x, z, dc = null) {
+// el relieve LISO: lomas suaves que se aplanan junto al camino (el camino del video va casi a nivel). Desde el 21-10 no
+// se pisa directamente: con los baches pequenos se hornea en la rejilla de 25 cm (suelo_bosque.js), que es `altura`
+function alturaLisa(x, z, dc = null) {
   const d = dc ?? distCamino(x, z).d;
   const h = 0.9 * Math.sin(x * 0.055 + 0.7) * Math.cos(z * 0.048) + 0.35 * Math.sin(x * 0.16 + 1.3) * Math.sin(z * 0.13 + 0.4)
     + 0.12 * Math.sin(x * 0.41) * Math.cos(z * 0.37 + 2.1);
   return h * (0.25 + 0.75 * suave(2.5, 9, d));
 }
+
+// el medio ancho del camino a cada lado ([izquierda, derecha] respecto al avance) a `largo` m del principio: el
+// empedrado se pierde en la hierba con un borde que ondula (por METROS de camino: por indice de tramo, 0,35 m, el borde
+// salia en dientes de sierra)
+export function anchoCamino(largo) {
+  return [ANCHO_CAMINO / 2 * (1 + 0.1 * Math.sin(largo * 0.45) + 0.05 * Math.sin(largo * 1.3 + 1)),
+    ANCHO_CAMINO / 2 * (1 + 0.1 * Math.sin(largo * 0.38 + 2) + 0.05 * Math.sin(largo * 1.1 + 4))];
+}
+
+// la altura que PISA el 18: la del terreno y, en el camino, encima de las piedras (empedrado3d.js)
+const LARGO_CAMINO = curva.getLength();
+export function alturaPisada(x, z) {
+  const { d, t } = distCamino(x, z);
+  const h = altura(x, z, d);
+  if (d > ANCHO_CAMINO) return h;
+  const [a, b] = anchoCamino(t * LARGO_CAMINO);
+  return h + levante(d, (a + b) / 2);
+}
+
+// la REJILLA (21-10): relieve liso + baches de 2-5 cm, menos en el empedrado; se hace una vez al cargar el modulo
+const REJILLA = crearRejilla({
+  muestra: (x, z) => { const d = distCamino(x, z).d; return [alturaLisa(x, z, d), 1 - suave(ANCHO_CAMINO / 2 + 0.15, ANCHO_CAMINO / 2 + 0.9, d)]; },
+  lado: 75, paso: 0.25, azar: T.azar(99),
+});
+// la altura del terreno (sin las piedras del camino): bilineal de la rejilla, la misma cuenta que el sombreador del suelo
+export function altura(x, z) { return REJILLA.altura(x, z); }
 
 export function puntoCamino(t) {
   const p = curva.getPointAt(Math.max(0, Math.min(1, t)));
@@ -49,14 +79,28 @@ export function crearMundo(scene) {
   const grupo = new THREE.Group();
   scene.add(grupo);
 
-  // niebla y cielo: el verde calido y lechoso del video
-  const NIEBLA = new THREE.Color(0xa9aa8a);
+  // niebla y cielo. 21-10 («hazlo mas bonito, ambiente 0 tenebroso»): ya no es el verde lechoso y espeso del video
+  // (0,038: a 25 m la mitad era niebla) sino una bruma fina y clara de manana de sol, con cielo azul entre las copas
+  const NIEBLA = new THREE.Color(0xd2e2cf);
   scene.background = NIEBLA.clone();
-  scene.fog = new THREE.FogExp2(NIEBLA, 0.038);
+  scene.fog = new THREE.FogExp2(NIEBLA, 0.015);
+  const bovedaCielo = new THREE.Mesh(new THREE.SphereGeometry(150, 32, 16), new THREE.ShaderMaterial({
+    uniforms: { uArriba: { value: new THREE.Color(0x7fb8e8) }, uAbajo: { value: NIEBLA.clone() } },
+    vertexShader: 'varying vec3 vD; void main() { vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform vec3 uArriba, uAbajo; varying vec3 vD;
+      void main() { float y = normalize(vD).y; gl_FragColor = vec4(mix(uAbajo, uArriba, smoothstep(0.02, 0.55, y)), 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide, depthWrite: false, fog: false,
+  }));
+  bovedaCielo.renderOrder = -10;
+  bovedaCielo.frustumCulled = false;
+  scene.add(bovedaCielo);
 
-  // luces: sol bajo y calido detras de los arboles + cielo/suelo
-  const cielo = new THREE.HemisphereLight(0xf0ead0, 0x463f2a, 1.7);
-  const sol = new THREE.DirectionalLight(0xffdca0, 3.1);
+  // luces: sol de media manana, dorado, y un cielo que rellena con azul claro y rebota verde del prado
+  const cielo = new THREE.HemisphereLight(0xe2f0ff, 0x6f8f3e, 1.65);
+  const sol = new THREE.DirectionalLight(0xffe2a6, 3.2);
   sol.castShadow = true;
   sol.shadow.mapSize.set(2048, 2048);
   Object.assign(sol.shadow.camera, { near: 1, far: 80, left: -14, right: 14, top: 14, bottom: -14 });
@@ -68,54 +112,12 @@ export function crearMundo(scene) {
   const _ejeV = new THREE.Vector3().crossVectors(_ejeU, DIR_SOL).normalize();
   const _foco = new THREE.Vector3();
 
-  // ---------------- suelo ----------------
-  const N = 150;
-  const geo = new THREE.PlaneGeometry(LADO * 2 + 30, LADO * 2 + 30, N, N);
-  geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, altura(pos.getX(i), pos.getZ(i)));
-  geo.computeVertexNormals();
-  const texSuelo = T.suelo();
-  texSuelo.repeat.set(36, 36);
-  const suelo = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: texSuelo }));
-  suelo.receiveShadow = true;
-  grupo.add(suelo);
+  // (el SUELO va mas abajo, despues de los arboles: su mascara pone hojarasca debajo de ellos)
 
   // ---------------- camino empedrado ----------------
-  {
-    const vs = [], uvs = [], idx = [];
-    let largo = 0;
-    for (let i = 0; i < CAMINO.length; i++) {
-      const p = CAMINO[i];
-      const q = CAMINO[Math.min(CAMINO.length - 1, i + 1)], o = CAMINO[Math.max(0, i - 1)];
-      const tx = q.x - o.x, tz = q.z - o.z, l = Math.hypot(tx, tz) || 1;
-      const nx = -tz / l, nz = tx / l;
-      if (i) largo += Math.hypot(p.x - CAMINO[i - 1].x, p.z - CAMINO[i - 1].z);
-      // bordes irregulares: el empedrado se pierde en la hierba
-      // la variacion va por METROS de camino: por indice de tramo (0,35 m) el borde salia en dientes de sierra
-      const a = ANCHO_CAMINO / 2 * (1 + 0.1 * Math.sin(largo * 0.45) + 0.05 * Math.sin(largo * 1.3 + 1));
-      const b = ANCHO_CAMINO / 2 * (1 + 0.1 * Math.sin(largo * 0.38 + 2) + 0.05 * Math.sin(largo * 1.1 + 4));
-      for (const [s, ancho] of [[-1, a], [1, b]]) {
-        const x = p.x + nx * s * ancho, z = p.z + nz * s * ancho;
-        vs.push(x, altura(x, z) + 0.025, z);
-        uvs.push(s < 0 ? 0 : ANCHO_CAMINO / PIEDRA, largo / PIEDRA);
-      }
-      if (i) {
-        const k = i * 2;
-        idx.push(k - 2, k - 1, k, k - 1, k + 1, k);
-      }
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(vs, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    g.setIndex(idx);
-    g.computeVertexNormals();
-    const tex = T.empedrado();
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2 }));
-    m.receiveShadow = true;
-    m.userData.caminoCortes = 2;          // vertices por fila de la cinta (lo lee la auditoria)
-    grupo.add(m);
-  }
+  // 21-10: ya no hay CINTA debajo de las piedras (la junta pintada, luego de foto): con el suelo de tierra de verdad
+  // (suelo_bosque.js, tierra pisada en el camino) las piedras se asientan en el terreno y la cinta oscura asomaba como
+  // un marco en los bordes, donde las piedras se ralean. Las piedras en 3D van en empedrado3d.js (mas abajo).
 
   // ---------------- ruinas: columnas de sillares, un arco, muros caidos ----------------
   const texSillar = T.sillar();
@@ -123,6 +125,8 @@ export function crearMundo(scene) {
   const cajaGeo = new THREE.BoxGeometry(1, 1, 1);
   const sillares = [];          // [x, y, z, sx, sy, sz, giro]
   const ruinas = [];            // centros para no plantar arboles encima
+  const columnas = [];          // para la hiedra (bosque_vida.js)
+  let arco = null;
   function columna(x, z, bloques, lado = 0.72, giro = r() * 0.6, fijo = null) {
     // fijo = Y de la base: las dos columnas del arco arrancan igual y con sillares iguales, asi acaban a la MISMA
     // altura (con alturas al azar el arco quedaba flotando sobre la mas baja)
@@ -141,6 +145,7 @@ export function crearMundo(scene) {
     }
     choques.circulos.push({ x, z, r: lado * 0.75 });
     ruinas.push([x, z]);
+    columnas.push({ x, z, y0, yTop: y, lado, giro });
     return y;
   }
   function muro(x, z, ang, largo, alto) {
@@ -177,6 +182,7 @@ export function crearMundo(scene) {
     const base = Math.min(altura(p.x + nx * vano, p.z + nz * vano), altura(p.x - nx * vano, p.z - nz * vano)) - 0.15;
     const hb = columna(p.x + nx * vano, p.z + nz * vano, 6, 0.8, giro, base);
     columna(p.x - nx * vano, p.z - nz * vano, 6, 0.8, giro, base);
+    arco = { x: p.x, z: p.z, nx, nz, vano, hb, giro };
     // semicirculo de radio = vano, con el centro a la altura de las columnas: la primera dovela apoya en su cabeza
     // (antes iba 0,3 m por encima y en elipse, con las dovelas giradas como en circulo: flotaba)
     const dov = 11;
@@ -213,6 +219,9 @@ export function crearMundo(scene) {
   }
 
   // ---------------- arboles ----------------
+  // el CLARO soleado (21-10): sin arboles ni helechos y lleno de flores, a un lado del camino
+  const claro = (() => { const p = puntoCamino(0.58); return { x: p.x + p.tz * 9.5, z: p.z - p.tx * 9.5, r: 6.5 }; })();
+  const enClaro = (x, z, m = 0) => Math.hypot(x - claro.x, z - claro.z) < claro.r + m;
   const arboles = [];
   const libre = (x, z, dmin) => {
     for (const [ax, az] of ruinas) if (Math.hypot(ax - x, az - z) < 3) return false;
@@ -226,9 +235,11 @@ export function crearMundo(scene) {
     if (d < ANCHO_CAMINO / 2 + 2.2) continue;
     // mas espeso lejos del camino
     if (d < 7 && r() < 0.55) continue;
-    if (!libre(x, z, 3.2)) continue;
-    const rb = 0.32 + r() * 0.42, h = 11 + r() * 9;
-    arboles.push({ x, z, rb, h, y: altura(x, z, d) });
+    if (!libre(x, z, 3.2) || enClaro(x, z, 1.5)) continue;
+    // uno de cada cuatro, ABEDUL: tronco blanco y fino, copa clara (21-10)
+    const abedul = r() < 0.27;
+    const rb = abedul ? 0.16 + r() * 0.1 : 0.32 + r() * 0.42, h = abedul ? 9 + r() * 5 : 11 + r() * 9;
+    arboles.push({ x, z, rb, h, y: altura(x, z, d), abedul });
   }
   {
     const texC = T.corteza();
@@ -242,18 +253,23 @@ export function crearMundo(scene) {
       p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k);
     }
     tronco.computeVertexNormals();
-    const im = new THREE.InstancedMesh(tronco, new THREE.MeshLambertMaterial({ map: texC }), arboles.length);
     const mt = new THREE.Matrix4(), q = new THREE.Quaternion();
-    arboles.forEach((a, i) => {
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * Math.PI * 2);
-      mt.compose(new THREE.Vector3(a.x, a.y - 0.2, a.z), q, new THREE.Vector3(a.rb, a.h, a.rb));
-      im.setMatrixAt(i, mt);
-      choques.circulos.push({ x: a.x, z: a.z, r: a.rb + 0.12 });
-    });
-    im.castShadow = im.receiveShadow = true;
-    grupo.add(im);
+    const texB = T.abedul();
+    texB.repeat.set(1, 4);
+    for (const [lista, mat] of [[arboles.filter((a) => !a.abedul), new THREE.MeshLambertMaterial({ map: texC })],
+      [arboles.filter((a) => a.abedul), new THREE.MeshLambertMaterial({ map: texB })]]) {
+      const im = new THREE.InstancedMesh(tronco, mat, lista.length);
+      lista.forEach((a, i) => {
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * Math.PI * 2);
+        mt.compose(new THREE.Vector3(a.x, a.y - 0.2, a.z), q, new THREE.Vector3(a.rb, a.h, a.rb));
+        im.setMatrixAt(i, mt);
+        choques.circulos.push({ x: a.x, z: a.z, r: a.rb + 0.12 });
+      });
+      im.castShadow = im.receiveShadow = true;
+      grupo.add(im);
+    }
     // copas: racimos de bultos altos (el techo del bosque deja pasar el sol a manchas)
-    const texH = T.hojas();
+    const texH = T.hojas('#5f8a36');
     texH.repeat.set(2, 2);
     const bulto = new THREE.IcosahedronGeometry(1, 2);
     const bp = bulto.attributes.position;
@@ -265,26 +281,35 @@ export function crearMundo(scene) {
     bulto.computeVertexNormals();
     const copas = [];
     for (const a of arboles) {
-      const n = 4 + Math.floor(r() * 4);
+      // el abedul: copa mas pequena, mas alta y mas clara
+      const n = a.abedul ? 3 + Math.floor(r() * 3) : 4 + Math.floor(r() * 4);
       for (let k = 0; k < n; k++) {
-        const ang = r() * Math.PI * 2, rad = 1 + r() * 2.6;
-        copas.push([a.x + Math.cos(ang) * rad, a.y + a.h * (0.72 + r() * 0.3), a.z + Math.sin(ang) * rad, 1.8 + r() * 1.8]);
+        const ang = r() * Math.PI * 2, rad = a.abedul ? 0.6 + r() * 1.4 : 1 + r() * 2.6;
+        copas.push([a.x + Math.cos(ang) * rad, a.y + a.h * (a.abedul ? 0.66 + r() * 0.34 : 0.72 + r() * 0.3), a.z + Math.sin(ang) * rad,
+          a.abedul ? 1.2 + r() * 1.1 : 1.8 + r() * 1.8, a.abedul]);
       }
       // alguna rama baja suelta
-      if (r() < 0.4) copas.push([a.x + (r() - 0.5) * 3, a.y + a.h * (0.45 + r() * 0.15), a.z + (r() - 0.5) * 3, 1 + r() * 0.8]);
+      if (r() < 0.4) copas.push([a.x + (r() - 0.5) * 3, a.y + a.h * (0.45 + r() * 0.15), a.z + (r() - 0.5) * 3, 1 + r() * 0.8, a.abedul]);
     }
-    const imc = new THREE.InstancedMesh(bulto, new THREE.MeshLambertMaterial({ map: texH, color: 0xa8b882 }), copas.length);
+    const imc = new THREE.InstancedMesh(bulto, new THREE.MeshLambertMaterial({ map: texH, color: 0xe4f0c4 }), copas.length);
     const col = new THREE.Color();
-    copas.forEach(([x, y, z, s], i) => {
+    copas.forEach(([x, y, z, s, ab], i) => {
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * 6.28);
       mt.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(s, s, s));
       imc.setMatrixAt(i, mt);
-      col.setHSL(0.2 + r() * 0.06, 0.35 + r() * 0.15, 0.32 + r() * 0.12);
+      // verdes vivos (21-10): antes casi grises (saturacion 0,35, luz 0,32)
+      if (ab) col.setHSL(0.19 + r() * 0.04, 0.55 + r() * 0.15, 0.5 + r() * 0.1);
+      else col.setHSL(0.22 + r() * 0.07, 0.45 + r() * 0.2, 0.38 + r() * 0.12);
       imc.setColorAt(i, col);
     });
     imc.castShadow = true;
     grupo.add(imc);
   }
+
+  // ---------------- el SUELO de tierra de verdad (suelo_bosque.js) y lo que hay tirado (hojarasca3d.js) ----------------
+  const MASCARA = crearMascara({ lado: 75, paso: 0.5, distCamino, anchoCamino: ANCHO_CAMINO / 2, arboles, claro });
+  const sueloReal = crearSuelo({ grupo, rejilla: REJILLA, mascara: MASCARA });
+  const tirado = crearHojarasca({ grupo, altura, mascara: MASCARA.mascara, distCamino: (x, z) => distCamino(x, z), anchoCamino: ANCHO_CAMINO / 2, LADO, azar: T.azar, corteza: T.corteza() });
 
   // ---------------- helechos, hierba y rocas ----------------
   function roseta(tex, hojasN, ancho, alto, inclina) {
@@ -305,7 +330,7 @@ export function crearMundo(scene) {
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     g.setIndex(idx);
     g.computeVertexNormals();
-    return new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide }));
+    return new THREE.Mesh(g, meceMaterial(new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.45, side: THREE.DoubleSide }), 0.07));
   }
   function sembrar(malla, n, filtro, escala) {
     const im = new THREE.InstancedMesh(malla.geometry, malla.material, n);
@@ -326,9 +351,12 @@ export function crearMundo(scene) {
     return im;
   }
   const helecho = roseta(T.helecho(), 7, 0.55, 0.95, 0.95);
-  sembrar(helecho, 1500, (d) => d > ANCHO_CAMINO / 2 + 0.3 && (d < 7 || r() < 0.45), [0.55, 1.35]);
+  sembrar(helecho, 1500, (d, x, z) => d > ANCHO_CAMINO / 2 + 0.3 && !enClaro(x, z) && (d < 7 || r() < 0.45), [0.55, 1.35]);
   const hierba = roseta(T.hierba(), 3, 0.5, 0.42, 0.25);
-  sembrar(hierba, 3200, (d) => d > ANCHO_CAMINO / 2 - 0.2, [0.6, 1.4]);
+  // la hierba de cruces, solo donde el suelo es hierba (la mascara), y de un verde apagado de verdad
+  hierba.material.color.set(0xc4c8a0);
+  helecho.material.color.set(0xb4bc98);
+  sembrar(hierba, 6500, (d, x, z) => d > ANCHO_CAMINO / 2 - 0.2 && r() < 0.1 + MASCARA.mascara(x, z)[2] * 1.2, [0.6, 1.5]);
   {
     const roca = new THREE.IcosahedronGeometry(1, 1);
     const rp = roca.attributes.position;
@@ -355,12 +383,18 @@ export function crearMundo(scene) {
     grupo.add(im);
   }
 
+  // ---------------- las piedras del camino, en 3D ----------------
+  const empedrado = crearEmpedrado({ grupo, curva, altura, ancho: anchoCamino });
+
+  // ---------------- la vida: flores, setas, arbustos, hiedra, mariposas (bosque_vida.js) ----------------
+  const vida = crearVida({ grupo, r, altura, distCamino, ANCHO_CAMINO, LADO, claro, arboles, columnas, arco, choques });
+
   // ---------------- haces de sol y motas ----------------
   const rayos = new THREE.Group();
   {
     const tex = T.rayo();
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
-    for (let i = 0; i < 26; i++) {
+    const mat = new THREE.MeshBasicMaterial({ map: tex, color: 0xffe6a8, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    for (let i = 0; i < 22; i++) {
       const t = r(), p = puntoCamino(t), x = p.x + (r() - 0.5) * 24, z = p.z + (r() - 0.5) * 24;
       const alto = 18 + r() * 10, ancho = 1.5 + r() * 3;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(ancho, alto), mat);
@@ -390,7 +424,14 @@ export function crearMundo(scene) {
     return m;
   })();
 
+  let tAntes = 0;
   function actualizar(t, foco) {
+    vida.actualizar(t, Math.min(0.1, Math.max(0, t - tAntes)), foco);
+    empedrado.actualizar(foco);
+    sueloReal.actualizar(foco);
+    tirado.actualizar(foco);
+    tAntes = t;
+    bovedaCielo.position.set(foco.x, 0, foco.z);
     // el sol y su sombra siguen al heroe (la caja de sombra es pequena y nitida)
     // ajustado a la rejilla de texeles del mapa de sombras en el plano de la luz: si la caja se mueve medio texel
     // cada fotograma, los bordes de todas las sombras tiemblan al andar
@@ -399,7 +440,7 @@ export function crearMundo(scene) {
     _foco.copy(foco).addScaledVector(_ejeU, Math.round(u / texel) * texel - u).addScaledVector(_ejeV, Math.round(v / texel) * texel - v);
     sol.position.copy(_foco).addScaledVector(DIR_SOL, 40);
     sol.target.position.copy(_foco);
-    for (const m of rayos.children) m.material.opacity = 0.2;
+    for (const m of rayos.children) m.material.opacity = 0.15;
     rayos.children.forEach((m, i) => { m.scale.x = 1 + 0.08 * Math.sin(t * 0.4 + m.userData.fase); });
     // motas alrededor del heroe, a la deriva. Cada una vive en coordenadas del mundo y se envuelve SOLA cuando se
     // aleja mas de 14 m (antes se movia la nube entera a saltos de 2 m y se veian brincar todas a la vez)
@@ -421,8 +462,11 @@ export function crearMundo(scene) {
 
   const p0 = puntoCamino(0.02);
   return {
-    LADO, altura, choques, actualizar, sol, puntoCamino, distCamino,
+    // altura = lo que pisa el 18 (encima de las piedras del camino); alturaTerreno, el suelo sin ellas (la auditoria del
+    // camino mira que el terreno no asome por encima de la junta)
+    LADO, altura: alturaPisada, alturaTerreno: altura, choques, actualizar, sol, puntoCamino, distCamino,
     salida: { x: p0.x, z: p0.z, giro: Math.atan2(p0.tx, p0.tz) },
-    info: { arboles: arboles.length, sillares: sillares.length, circulos: choques.circulos.length, cajas: choques.cajas.length },
+    conectar({ renderer }) { if (renderer) { renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.25; } },
+    info: { arboles: arboles.length, abedules: arboles.filter((a) => a.abedul).length, sillares: sillares.length, circulos: choques.circulos.length, cajas: choques.cajas.length, ...vida.info, ...empedrado.info, ...tirado.info },
   };
 }

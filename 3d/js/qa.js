@@ -24,7 +24,7 @@ export async function auditar(d) {
     d.scene.traverse((o) => { if (o.isMesh && o.userData.caminoCortes) cintas.push(o); });
     let peor = 0, malos = 0, n = 0;
     const probar = (x, z, yc) => {
-      const dy = altura(x, z) - yc;
+      const dy = (M.alturaTerreno || altura)(x, z) - yc;
       n++;
       if (dy > 0) { malos++; peor = Math.max(peor, dy); }
     };

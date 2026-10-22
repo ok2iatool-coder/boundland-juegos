@@ -4,6 +4,7 @@
 // vetas que se desliza aguas abajo (mas deprisa en la cascada).
 import * as THREE from 'three';
 import { GEO, altura } from './relieve.js';
+import { DIR_SOL } from './luz.js';
 
 // vetas claras sobre el azul del agua (se repite a lo largo)
 function texturaVetas(semilla, claro) {
@@ -25,17 +26,99 @@ function texturaVetas(semilla, claro) {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
-function materialAgua(textura, color, opacidad) {
-  return new THREE.MeshBasicMaterial({
-    map: textura, color, transparent: true, opacity: opacidad, depthWrite: false, side: THREE.DoubleSide,
+// EL AGUA TRANSPARENTE (2026-10-21, "como el charco de la parcela"): refleja el cielo (mas cuanto mas rasante se mira:
+// Fresnel), brilla donde se refleja el sol, se riza con ondas que se mueven (en el rio, aguas abajo) y deja ver el
+// FONDO: en la orilla casi transparente y clara, en lo hondo verde oscuro y opaca. La hondura va por vertice (la cota
+// del agua menos la del suelo), por eso los lagos son una rejilla de anillos y el rio lleva cinco vertices de ancho.
+// `vetas` (la textura de antes) marca la corriente en el rio y la cascada.
+const RUIDO = (() => {
+  const N2 = 128, d = new Uint8Array(N2 * N2 * 4);
+  let sem = 99;
+  const r = () => { sem = (Math.imul(sem, 1664525) + 1013904223) >>> 0; return sem / 4294967296; };
+  const G = 8, rej = Array.from({ length: G * G }, r), v = (i, j) => rej[((j % G + G) % G) * G + ((i % G + G) % G)];
+  for (let y = 0; y < N2; y++) for (let x = 0; x < N2; x++) {
+    let t = 0, a = 0.6, sm = 0;
+    for (let o = 0; o < 3; o++) {
+      const per = G << o, fx = (x / N2) * per, fy = (y / N2) * per, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, w = fy - j;
+      const uu = u * u * (3 - 2 * u), ww = w * w * (3 - 2 * w), vv = (ii, jj) => v((ii % per) + o * 3, (jj % per) + o * 5);
+      t += a * ((vv(i, j) * (1 - uu) + vv(i + 1, j) * uu) * (1 - ww) + (vv(i, j + 1) * (1 - uu) + vv(i + 1, j + 1) * uu) * ww);
+      sm += a; a *= 0.5;
+    }
+    const g = Math.round((t / sm) * 255), k = (y * N2 + x) * 4;
+    d[k] = d[k + 1] = d[k + 2] = g; d[k + 3] = 255;
+  }
+  const t = new THREE.DataTexture(d, N2, N2, THREE.RGBAFormat);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+})();
+function materialAgua(textura, { corriente = 0, espuma = 0, vel = 0, claro = 0x8fa38a, hondo = 0x1f3d3a, opaca = 0.9 } = {}) {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      uRuido: { value: RUIDO }, uVetas: { value: textura }, uT: { value: 0 }, uCorriente: { value: corriente }, uEspuma: { value: espuma }, uVel: { value: vel },
+      uSol: { value: DIR_SOL }, uCielo: { value: new THREE.Color(0xdad9c4) }, uHorizonte: { value: new THREE.Color(0x8c9a86) },
+      uClaro: { value: new THREE.Color(claro) }, uHondo: { value: new THREE.Color(hondo) }, uOpaca: { value: opaca },
+    }]),
+    vertexShader: `attribute float hondo;
+varying vec3 vW; varying float vHondo; varying vec2 vUv;
+#include <fog_pars_vertex>
+void main() {
+  vUv = uv; vHondo = hondo;
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz;
+  vec4 mvPosition = viewMatrix * w;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}`,
+    fragmentShader: `uniform sampler2D uRuido, uVetas; uniform float uT, uCorriente, uEspuma, uOpaca, uVel;
+uniform vec3 uSol, uCielo, uHorizonte, uClaro, uHondo;
+varying vec3 vW; varying float vHondo; varying vec2 vUv;
+#include <common>
+#include <fog_pars_fragment>
+float ola(vec2 p) {
+  return texture2D(uRuido, p * 0.18 + vec2(uT * 0.021, uT * 0.013)).r * 0.6 + texture2D(uRuido, p * 0.47 - vec2(uT * 0.017, -uT * 0.026)).r * 0.4;
+}
+void main() {
+  float h = max(vHondo, 0.0);
+  // las ondas: la pendiente del ruido que se mueve (en el rio, ademas, las vetas de la corriente)
+  vec2 p = vW.xz;
+  float e = 0.35, o0 = ola(p);
+  vec2 g = vec2(ola(p + vec2(e, 0.0)) - o0, ola(p + vec2(0.0, e)) - o0) / e;
+  float veta = uCorriente + uEspuma > 0.0 ? texture2D(uVetas, vUv - vec2(0.0, uT * uVel)).r : 1.0;
+  g *= 0.55 + 0.6 * uCorriente;
+  vec3 N = normalize(vec3(-g.x, 1.0, -g.y));
+  vec3 V = normalize(cameraPosition - vW);
+  vec3 R = reflect(-V, N);
+  float fres = 0.04 + 0.96 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
+  vec3 refl = mix(uHorizonte, uCielo, smoothstep(-0.05, 0.4, R.y));
+  float brillo = pow(max(dot(R, uSol), 0.0), 260.0) * 2.2 + pow(max(dot(R, uSol), 0.0), 30.0) * 0.06;
+  // el fondo: claro en la orilla, verde oscuro en lo hondo
+  vec3 fondo = mix(uClaro, uHondo, smoothstep(0.0, 2.2, h));
+  vec3 c = mix(fondo, refl, fres) + brillo * vec3(1.0, 0.95, 0.82);
+  c = mix(c, vec3(0.93, 0.96, 0.96), uEspuma * (1.0 - veta) * 0.6 + uCorriente * (1.0 - veta) * 0.18);
+  float alfa = mix(0.22, uOpaca, smoothstep(0.0, 1.6, h));
+  alfa = max(alfa, min(fres * 1.3, 1.0));
+  alfa *= smoothstep(0.0, 0.12, h) * (1.0 - uEspuma) + uEspuma;
+  gl_FragColor = vec4(c, clamp(alfa + brillo, 0.0, 1.0));
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <fog_fragment>
+}`,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
 }
+const conHondo = (g, f) => {
+  const P = g.attributes.position, h = new Float32Array(P.count);
+  for (let i = 0; i < P.count; i++) h[i] = f(P.getX(i), P.getY(i), P.getZ(i));
+  g.setAttribute('hondo', new THREE.BufferAttribute(h, 1));
+  return g;
+};
 
 // una cinta de agua por una linea [x, z, cota del agua, medio ancho]: plana de lado a lado, a la cota del agua o, donde el
 // fondo asoma (un arroyo de dos metros en una rejilla de ocho), un palmo por encima del suelo
 function cinta(pts, ensancha = 1.12) {
-  const pos = [], uv = [], idx = [];
+  const pos = [], uv = [], idx = [], hon = [], A = [-1, -0.5, 0, 0.5, 1], na = A.length;
   let s = 0;
   for (let k = 0; k < pts.length; k++) {
     const [x, z, nivel, w] = pts[k];
@@ -46,26 +129,37 @@ function cinta(pts, ensancha = 1.12) {
     if (k > 0) s += Math.hypot(x - pts[k - 1][0], z - pts[k - 1][1]);
     const W = w * ensancha, nx = -tz, nz = tx;
     const y = Math.max(nivel, altura(x, z) + 0.06);
-    pos.push(x + nx * W, y, z + nz * W, x - nx * W, y, z - nz * W);
-    uv.push(0, s / 14, 1, s / 14);
-    if (k > 0) { const q = (k - 1) * 2; idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+    for (const t of A) {
+      const px = x + nx * W * t, pz = z + nz * W * t;
+      pos.push(px, y, pz); uv.push((t + 1) / 2, s / 14);
+      hon.push(Math.max(0.03, y - altura(px, pz)));
+    }
+    if (k > 0) for (let m = 0; m < na - 1; m++) { const q = (k - 1) * na + m; idx.push(q, q + 1, q + na, q + 1, q + na + 1, q + na); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('hondo', new THREE.Float32BufferAttribute(hon, 1));
   g.setIndex(idx);
   g.computeBoundingSphere();
   return g;
 }
 // una elipse llana (los lagos, la poza)
-function elipse(cx, cz, rx, rz, giro, y, seg = 72) {
+function elipse(cx, cz, rx, rz, giro, y, seg = 96, anillos = 14) {
   const pos = [cx, y, cz], uv = [0.5, 0.5], idx = [];
   const c = Math.cos(giro), s = Math.sin(giro);
-  for (let k = 0; k <= seg; k++) {
-    const t = (k / seg) * Math.PI * 2, u = rx * Math.cos(t), v = rz * Math.sin(t);
-    pos.push(cx + u * c - v * s, y, cz + u * s + v * c);
-    uv.push(0.5 + 0.5 * Math.cos(t) * rx / 40, 0.5 + 0.5 * Math.sin(t) * rz / 40);
-    if (k > 0) idx.push(0, k, k + 1);
+  for (let a = 1; a <= anillos; a++) {
+    const f = a / anillos;
+    for (let k = 0; k < seg; k++) {
+      const t = (k / seg) * Math.PI * 2, u = rx * f * Math.cos(t), v = rz * f * Math.sin(t);
+      pos.push(cx + u * c - v * s, y, cz + u * s + v * c);
+      uv.push(0.5 + 0.5 * f * Math.cos(t), 0.5 + 0.5 * f * Math.sin(t));
+    }
+  }
+  for (let k = 0; k < seg; k++) idx.push(0, 1 + ((k + 1) % seg), 1 + k);
+  for (let a = 1; a < anillos; a++) {
+    const b0 = 1 + (a - 1) * seg, b1 = 1 + a * seg;
+    for (let k = 0; k < seg; k++) { const k1 = (k + 1) % seg; idx.push(b0 + k, b0 + k1, b1 + k, b0 + k1, b1 + k1, b1 + k); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -73,21 +167,21 @@ function elipse(cx, cz, rx, rz, giro, y, seg = 72) {
   g.setIndex(idx);
   g.computeVertexNormals();
   g.computeBoundingSphere();
-  return g;
+  return conHondo(g, (x, yy, z) => Math.max(0.0, yy - altura(x, z)));
 }
 
 export function crearAgua(grupo, tono) {
   const g = new THREE.Group();
   g.name = 'agua';
   grupo.add(g);
-  const AZUL = 0x7fb0c4;
   const vetas = texturaVetas(7, false), vetasCascada = texturaVetas(19, true), vetasLago = texturaVetas(31, false);
   vetas.repeat.set(1, 1);
   vetasCascada.repeat.set(1, 1);
   vetasLago.repeat.set(3, 3);
-  const matRio = materialAgua(vetas, AZUL, 0.86);
-  const matCascada = materialAgua(vetasCascada, 0xcfe4ec, 0.9);
-  const matLago = materialAgua(vetasLago, 0x6d9fb6, 0.88);
+  const matRio = materialAgua(vetas, { corriente: 1, vel: 0.28 });
+  const matCascada = materialAgua(vetasCascada, { espuma: 1, opaca: 0.95, vel: 1.6 });
+  const matLago = materialAgua(vetasLago, {});
+  const mats = [matRio, matCascada, matLago];
   const mallas = [];
   const poner = (geo, mat, nombre) => { const m = new THREE.Mesh(geo, mat); m.name = nombre; m.renderOrder = 2; g.add(m); mallas.push(m); return m; };
 
@@ -115,6 +209,7 @@ export function crearAgua(grupo, tono) {
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setIndex(idx);
     geo.computeBoundingSphere();
+    conHondo(geo, () => 1);
     poner(geo, matCascada, 'cascada');
   }
   // la espuma al pie: un anillo blanco que late
@@ -160,6 +255,7 @@ export function crearAgua(grupo, tono) {
       vetas.offset.y -= dt * 0.28;                // aguas abajo (v crece a lo largo de la linea, de la fuente a la boca)
       vetasCascada.offset.y -= dt * 1.6;
       vetasLago.offset.x += dt * 0.004;
+      for (const m of mats) m.uniforms.uT.value = t;
       espuma.material.opacity = 0.45 + 0.15 * Math.sin(t * 5.3);
       const k = 1 + 0.06 * Math.sin(t * 3.1);
       espuma.scale.set(k, k, 1);

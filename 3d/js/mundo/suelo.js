@@ -92,8 +92,62 @@ const CERCA = 1100, TIRAR = 1450;              // m del foco al trozo
 const BANDAS = [[380, SUB], [760, 2], [Infinity, 1]];
 const subDe = (d) => BANDAS.find(([m]) => d < m)[1];
 const LP = 5, LN = N / LP;                     // la malla de lejos: un vertice cada 5 (40 m)
+
+// EL GRANO del suelo (2026-10-21, "como la parcela"): un vertice cada 2 m no lleva el detalle de la parcela (su color
+// iba cada 20 cm), asi que lo pone el sombreador: manchas de tres tamanos (6 m, 1,5 m y 40 cm) que aclaran y oscurecen,
+// y calvas de tierra en lo llano. Proyectadas por los TRES lados segun la normal (en una ladera, proyectadas desde
+// arriba se estiraban en vetas). La textura es ruido que se repite sin costura.
+function texturaGrano() {
+  const N2 = 256, P = new Float32Array(N2 * N2), d = new Uint8Array(N2 * N2 * 4);
+  let sem = 4242;
+  const r = () => { sem = (Math.imul(sem, 1664525) + 1013904223) >>> 0; return sem / 4294967296; };
+  const G = 16, rej = Array.from({ length: G * G }, r);
+  const v = (i, j) => rej[((j % G + G) % G) * G + ((i % G + G) % G)];
+  for (let y = 0; y < N2; y++) for (let x = 0; x < N2; x++) {
+    let t = 0, a = 0.55, s = 0;
+    for (let o = 0; o < 4; o++) {
+      const per = G << o, fx = (x / N2) * per, fy = (y / N2) * per, i = Math.floor(fx), j = Math.floor(fy), u = fx - i, w = fy - j;
+      const uu = u * u * (3 - 2 * u), ww = w * w * (3 - 2 * w);
+      const vv = (ii, jj) => v((ii % per) + o * 5, (jj % per) + o * 7);
+      t += a * ((vv(i, j) * (1 - uu) + vv(i + 1, j) * uu) * (1 - ww) + (vv(i, j + 1) * (1 - uu) + vv(i + 1, j + 1) * uu) * ww);
+      s += a; a *= 0.5;
+    }
+    P[y * N2 + x] = t / s;
+  }
+  for (let k = 0; k < N2 * N2; k++) { const g = Math.round(P[k] * 255); d[k * 4] = d[k * 4 + 1] = d[k * 4 + 2] = g; d[k * 4 + 3] = 255; }
+  const t = new THREE.DataTexture(d, N2, N2, THREE.RGBAFormat);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+}
+let GRANO = null;
+export function granoSuelo(mat) {
+  GRANO = GRANO || texturaGrano();
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uGrano = { value: GRANO };
+    sh.vertexShader = 'varying vec3 vGranoW;\nvarying vec3 vGranoN;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+  vGranoW = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  vGranoN = normalize(mat3(modelMatrix) * objectNormal);`);
+    sh.fragmentShader = 'varying vec3 vGranoW;\nvarying vec3 vGranoN;\nuniform sampler2D uGrano;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+  {
+    vec3 bw = pow(abs(normalize(vGranoN)), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
+    vec3 p = vGranoW;
+    #define TRI(s) (texture2D(uGrano, p.zy * (s)).r * bw.x + texture2D(uGrano, p.xz * (s)).r * bw.y + texture2D(uGrano, p.xy * (s)).r * bw.z)
+    float n1 = TRI(1.0 / 24.0), n2 = TRI(1.0 / 6.0), n3 = TRI(1.0 / 1.6);
+    float lejos = smoothstep(60.0, 220.0, distance(cameraPosition, p));
+    float d = (n1 - 0.5) * 0.26 + ((n2 - 0.5) * 0.2 + (n3 - 0.5) * 0.14) * (1.0 - 0.7 * lejos);
+    diffuseColor.rgb *= 1.0 + d;
+    // calvas de tierra seca en lo llano (donde hay hierba se notan entre las matas)
+    float calva = smoothstep(0.64, 0.78, n2 * 0.55 + n1 * 0.45) * bw.y * (1.0 - lejos);
+    diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.18, 1.0, 0.72), 0.45 * calva);
+  }`);
+  };
+  mat.customProgramCacheKey = () => 'suelo-grano';
+}
 export function crearSuelo(grupo, tono) {
-  const mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: tono, flatShading: true });
+  const mat = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: tono });
+  granoSuelo(mat);
   const porLado = N / CEL, f = N + 1;
   const c = new THREE.Color();
   const trozos = new Map();                      // clave tj * porLado + ti -> { m, s }
@@ -137,33 +191,36 @@ export function crearSuelo(grupo, tono) {
       }
       if (j % tanda === tanda - 1) { corte(); yield; t0 = performance.now(); }
     }
-    // las caras: una cara hacia arriba por triangulo, con el color medio de sus tres vertices (indices en hv: va = j*nv+i)
+    // las caras (2026-10-21, "como la parcela"): vertices COMPARTIDOS con su color y la normal de la pendiente de alli
+    // (en los bordes, con la cota de fuera): el suelo se ve SUAVE, sin los triangulos; con una cara de un color cada una,
+    // en las laderas salian astillas largas
     const nt = n * n * 2;
-    const pos = new Float32Array(nt * 9), col = new Float32Array(nt * 9);
-    let q = 0;
-    const cara = (va, vb, vd) => {
-      const o = q * 9;
-      for (let t = 0; t < 3; t++) {
-        const v = t === 0 ? va : t === 1 ? vb : vd, jv = (v / nv) | 0, iv = v - jv * nv;
-        pos[o + t * 3] = x0 + iv * paso; pos[o + t * 3 + 1] = hv[v]; pos[o + t * 3 + 2] = z0 + jv * paso;
+    const pos = new Float32Array(nv * nv * 3), nor = new Float32Array(nv * nv * 3);
+    const cota = (i, j) => (i >= 0 && j >= 0 && i <= n && j <= n ? hv[j * nv + i] : alturaVertice(x0 + i * paso, z0 + j * paso));
+    for (let j = 0; j < nv; j++) {
+      for (let i = 0; i < nv; i++) {
+        const v = j * nv + i;
+        pos[v * 3] = x0 + i * paso; pos[v * 3 + 1] = hv[v]; pos[v * 3 + 2] = z0 + j * paso;
+        const gx = (cota(i + 1, j) - cota(i - 1, j)) / (2 * paso), gz = (cota(i, j + 1) - cota(i, j - 1)) / (2 * paso), l = Math.hypot(gx, 1, gz);
+        nor[v * 3] = -gx / l; nor[v * 3 + 1] = 1 / l; nor[v * 3 + 2] = -gz / l;
       }
-      const r = (cv[va * 3] + cv[vb * 3] + cv[vd * 3]) / 3, g = (cv[va * 3 + 1] + cv[vb * 3 + 1] + cv[vd * 3 + 1]) / 3, b = (cv[va * 3 + 2] + cv[vb * 3 + 2] + cv[vd * 3 + 2]) / 3;
-      for (let t = 0; t < 3; t++) { col[o + t * 3] = r; col[o + t * 3 + 1] = g; col[o + t * 3 + 2] = b; }
-      q++;
-    };
+      if (j % (tanda * 2) === tanda * 2 - 1) { corte(); yield; t0 = performance.now(); }
+    }
+    const idx = new Uint32Array(nt * 3);
+    let q = 0;
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         const A = j * nv + i, B = A + 1, C = A + nv, D = C + 1;
         // (el orden ya da la cara hacia arriba con z al sur)
-        if (diagFina(hv[A], hv[B], hv[C], hv[D]) === 0) { cara(A, D, B); cara(A, C, D); }
-        else { cara(A, C, B); cara(B, C, D); }
+        if (diagFina(hv[A], hv[B], hv[C], hv[D]) === 0) { idx[q++] = A; idx[q++] = D; idx[q++] = B; idx[q++] = A; idx[q++] = C; idx[q++] = D; }
+        else { idx[q++] = A; idx[q++] = C; idx[q++] = B; idx[q++] = B; idx[q++] = C; idx[q++] = D; }
       }
-      if (j % (tanda * 2) === tanda * 2 - 1) { corte(); yield; t0 = performance.now(); }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    g.computeVertexNormals();
+    g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(cv, 3));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
     g.computeBoundingSphere();
     const m = new THREE.Mesh(g, mat);
     m.receiveShadow = true;
@@ -187,7 +244,7 @@ export function crearSuelo(grupo, tono) {
   function tirar(k) {
     const t = trozos.get(k);
     grupo.remove(t.m);
-    tris -= t.m.geometry.attributes.position.count / 3;
+    tris -= t.m.geometry.index ? t.m.geometry.index.count / 3 : t.m.geometry.attributes.position.count / 3;
     t.m.geometry.dispose();
     trozos.delete(k);
     CACHE.delete(k);

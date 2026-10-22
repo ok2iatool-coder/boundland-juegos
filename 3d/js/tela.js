@@ -144,6 +144,7 @@ export function crearTela(raiz, altura, mapa = null) {
     }
     for (const b of cerca.cajas) {
       if (b.ytop != null && p.y >= b.ytop) continue;          // las que se pisan: por encima, la sostiene el suelo
+      if (b.ybot != null && p.y < b.ybot) continue;          // y por debajo de su fondo (la pasarela de encima)
       const ca = Math.cos(b.ang), sa = Math.sin(b.ang);
       const lx = (p.x - b.x) * ca + (p.z - b.z) * sa, lz = -(p.x - b.x) * sa + (p.z - b.z) * ca;
       const hx = b.hx + MARGEN, hz = b.hz + MARGEN;

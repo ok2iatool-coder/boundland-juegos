@@ -29,8 +29,10 @@ void main() {
   col = mix(col, uSuelo, smoothstep(-0.01, -0.2, y));
   float s = max(dot(d, uSolDir), 0.0);
   // el disco del sol (con borde neto, como todo) y su halo
-  col = mix(col, uSol * 1.12, smoothstep(0.99965, 0.9998, s));
-  col += uSol * (pow(s, 14.0) * 0.16 + pow(s, 200.0) * 0.25);
+  // el cielo se calienta y se aclara hacia el sol (21-10: con el sol bajo se ve en el cielo y tiene que leerse)
+  col = mix(col, uSol * 1.05, pow(s, 6.0) * 0.32 * (1.0 - smoothstep(0.1, 0.7, y)));
+  col = mix(col, uSol * 1.15, smoothstep(0.9993, 0.99955, s));
+  col += uSol * (pow(s, 14.0) * 0.2 + pow(s, 200.0) * 0.35);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -152,10 +154,35 @@ export function crearCielo(scene, dirSol) {
     }
   }
 
+  // ---------------- el resplandor del sol (21-10) ----------------
+  // Dos aureolas que SUMAN luz, a 9 km en la direccion del sol y con prueba de profundidad: lo que hay delante (un monte,
+  // la muralla, una nube) las corta por su silueta, como un deslumbramiento. No es un bloom: con este estilo las caras
+  // blancas al sol (los modulos, la nieve) tambien pasarian del umbral y brillarian todas.
+  const aureola = (tam, fuerza, caida) => {
+    const N = 256, lienzo = document.createElement('canvas');
+    lienzo.width = lienzo.height = N;
+    const c = lienzo.getContext('2d'), grad = c.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+    for (let i = 0; i <= 10; i++) { const r = i / 10; grad.addColorStop(r, `rgba(255,${Math.round(236 - 40 * r)},${Math.round(196 - 70 * r)},${(fuerza * Math.pow(1 - r, caida)).toFixed(4)})`); }
+    c.fillStyle = grad; c.fillRect(0, 0, N, N);
+    const tex = new THREE.CanvasTexture(lienzo);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, transparent: true, toneMapped: false }));
+    s.scale.set(tam, tam, 1);
+    s.frustumCulled = false;
+    s.renderOrder = 5;
+    return s;
+  };
+  const DIST_SOL = 9000;
+  const resplandor = new THREE.Group();
+  resplandor.name = 'resplandor';
+  resplandor.add(aureola(5200, 0.42, 2.2), aureola(1500, 0.7, 1.6), aureola(520, 0.9, 1.1));
+  scene.add(resplandor);
+
   return {
     actualizar(t, foco) {
       boveda.position.set(foco.x, 0, foco.z);
       nubes.rotation.y = t * 0.0025;
+      resplandor.position.set(foco.x + dirSol.x * DIST_SOL, dirSol.y * DIST_SOL, foco.z + dirSol.z * DIST_SOL);
     },
   };
 }

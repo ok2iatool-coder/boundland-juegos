@@ -17,6 +17,7 @@ import { TONO } from './tono.js';
 import { Lote } from './puerta.js';
 import { OBRA as OBRA_HIERBA } from './sitios.js';
 import { reservado } from './macro.js';
+import { reservadoTorres } from './torres.js';
 
 let CIUDAD = null;
 if (typeof window !== 'undefined') {
@@ -222,8 +223,8 @@ export function crearCimientos(grupo, cajas) {
     }
   }
   CIUDAD.casco.forEach((P) => huellaPequena(P, true));
-  // (donde va el macroedificio, macro.js, no hay modulos de El Panal)
-  CIUDAD.panal.forEach(({ hex }) => { const [x, z] = centroide(hex); if (!reservado(x, z)) huellaPequena(hex, false); });
+  // (donde van el macroedificio, macro.js, y las torres de refugio, torres.js, no hay modulos de El Panal)
+  CIUDAD.panal.forEach(({ hex }) => { const [x, z] = centroide(hex); if (!reservado(x, z) && !reservadoTorres(x, z)) huellaPequena(hex, false); });
 
   // ---- los grandes: losa de cimentacion y arranques de pilares (con caja de choque)
   function arranque(L, x, y, z, w, d, alto) {

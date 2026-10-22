@@ -28,6 +28,11 @@ export const M4 = {
   BORDE: { x0: -58, x1: 58, z0: -26, z1: 24 },
 };
 const xBloque = (i) => (i + 0.5) * T.LARGO;
+// SENCILLO (crearMuro4(escena, { sencillo: true }), el paso a 3D por el bosque, bosque/main.js; pedido del usuario: «en el
+// muro de 4 metros no tiene que estar la puerta, solo el muro, sencillo, en medio del bosque»): sin puesto ni carretera
+// (los bloques siguen por el hueco y el foso no se corta), sin bloque caido ni torcido, sin saltaderos y sin lo de
+// fuera (concertina, caballo de frisa, erizos, coche, arboles secos, torres). muro4.html lo pide sin la opcion: igual
+let SENCILLO = false;
 
 // ------------------------------------------------------------------ el suelo (sin lo que hay encima)
 function h2(i, j) { let h = (i * 374761393 + j * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
@@ -55,7 +60,7 @@ export function suelo(x, z) {
   // al pie del muro, por los dos lados, lo pisado: un poco mas bajo
   h -= 0.03 * (1 - lisa(0.8, 2.0, Math.abs(z)));
   // la calzada y su arcen (plana; fuera baja con el campo)
-  const calzada = 1 - lisa(3.1, 4.0, ax);
+  const calzada = SENCILLO ? 0 : 1 - lisa(3.1, 4.0, ax);
   const campo = -0.022 * Math.max(0, zz - 8);
   if (z > -0.9) {
     // la ronda de los militares: dos rodadas con el lomo en medio
@@ -64,7 +69,7 @@ export function suelo(x, z) {
     return h * (1 - calzada);
   }
   // FUERA: el foso (que la calzada cruza sobre su terraplen), el caballon de tierra y el campo que baja
-  const corte = Math.max(0, Math.min(1, (ax - 3.4) / 1.9));
+  const corte = SENCILLO ? 1 : Math.max(0, Math.min(1, (ax - 3.4) / 1.9));
   const hf = -M4.FOSO.hondo * fondoFoso(zz, x) * corte;
   let he = 0;
   if (zz > -M4.FOSO.z1) he = 0.55 * Math.exp(-(((zz - 5.8) / 1.15) ** 2)) * (0.7 + 0.6 * n1);
@@ -72,7 +77,9 @@ export function suelo(x, z) {
 }
 
 // ------------------------------------------------------------------ el mundo
-export function crearMuro4(scene) {
+export function crearMuro4(scene, opciones = {}) {
+  SENCILLO = !!opciones.sencillo;
+  if (SENCILLO) M4.cabezas = [];
   const L = crearLotes();
   const { cajaE, barra, cilindro, caja } = L;
   const r = azar(4041);
@@ -202,24 +209,24 @@ export function crearMuro4(scene) {
   const mBloque = (x, y, z, rx, ry, rz) => new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), V(1, 1, 1));
   for (let i = -M4.N; i < M4.N; i++) {
     const x = xBloque(i);
-    if (Math.abs(x) < M4.PUESTO) continue;
+    if (Math.abs(x) < M4.PUESTO && !SENCILLO) continue;
     const rb = azar(77 + i * 31);
-    if (i === M4.CAIDO) continue;
+    if (i === M4.CAIDO && !SENCILLO) continue;
     let rx = (rb() - 0.5) * 0.012, ry = (rb() - 0.5) * 0.012, dz = (rb() - 0.5) * 0.03, dy = -rb() * 0.035;
-    if (i === M4.TORCIDO) { rx = 0.04; dz = 0.02; }
+    if (i === M4.TORCIDO && !SENCILLO) { rx = 0.04; dz = 0.02; }
     ponerBloque(i, mBloque(x + (rb() - 0.5) * 0.012, dy, dz, rx, ry, (rb() - 0.5) * 0.004), { flecha: i === -10 });
   }
   // la ferralla que asoma de los cantos rotos
   for (const [a, b] of ferralla) cilindro('ferralla', a, b, 0.006, 5, 0);
   // los choques del muro: el PIE se pisa (0,5) y el ALMA tambien por arriba (4 m), a trozos por el puesto y el caido
   const xc = xBloque(M4.CAIDO);
-  for (const [x0, x1] of [[-M4.N * T.LARGO, -M4.PUESTO], [M4.PUESTO, xc - 0.6], [xc + 0.6, M4.N * T.LARGO]]) {
+  for (const [x0, x1] of SENCILLO ? [[-M4.N * T.LARGO, M4.N * T.LARGO]] : [[-M4.N * T.LARGO, -M4.PUESTO], [M4.PUESTO, xc - 0.6], [xc + 0.6, M4.N * T.LARGO]]) {
     caja2(x0, x1, -0.8, 0.8, T.ALTO_PIE);
     caja2(x0, x1, -0.15, 0.15, T.ALTO);
   }
 
   // ---- el bloque CAIDO hacia fuera: tumbado sobre el foso, el alma de puente hasta el caballon
-  {
+  if (!SENCILLO) {
     // giro de mas de 90 grados (alfa) para que la punta apoye en el caballon; se busca el que la deja en el suelo
     let mejor = null;
     for (let a = 0.05; a < 0.6; a += 0.005) {
@@ -251,7 +258,7 @@ export function crearMuro4(scene) {
     // y los sacos que cierran las rendijas con los bloques de al lado (luego, con los demas sacos)
   }
   // ---- el bloque TORCIDO, apuntalado con dos tablones contra el suelo
-  {
+  if (!SENCILLO) {
     const x = xBloque(M4.TORCIDO);
     for (const dx of [-0.35, 0.35]) {
       const a = V(x + dx, 2.75, 0.24), b = V(x + dx * 1.4, 0.0, 2.35);
@@ -333,7 +340,7 @@ export function crearMuro4(scene) {
   }
 
   // ---- la CARRETERA: de lejos de dentro, por el hueco del puesto, sobre el terraplen del foso y fuera por el campo
-  {
+  if (!SENCILLO) {
     const pos = [], uv = [], idx = [];
     const zs = [];
     for (let z = 46; z >= -82; z -= 0.5) zs.push(z);
@@ -388,7 +395,7 @@ export function crearMuro4(scene) {
   });
   {
     // el foso (de punta a punta menos el terraplen)
-    for (const [x0, x1] of [[-80, -4.4], [4.4, 80]]) {
+    for (const [x0, x1] of SENCILLO ? [[-80, 80]] : [[-80, -4.4], [4.4, 80]]) {
       const w = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, 2.6).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, M4.FOSO.agua, -2.8), agua);
       w.name = 'aguaFoso'; scene.add(w);
     }
@@ -403,7 +410,7 @@ export function crearMuro4(scene) {
   }
 
   // ================================================================== EL PUESTO DE CONTROL (x en [-2,4, 2,4])
-  {
+  if (!SENCILLO) {
     // el porton: dos hojas de tubo con malla soldada, cerradas con cadena y candado, sobre su carril; concertina encima
     const P = M4.PUESTO;
     for (const [x0, x1, z] of [[-P, 0.05, -0.035], [-0.05, P, 0.035]]) {
@@ -508,7 +515,7 @@ export function crearMuro4(scene) {
 
   // ================================================================== SALTADERO 1: el coche, las ruedas y la escalera de trastos
   const ESCALON = [];                         // [x0, x1, z0, z1, top]: lo que se pisa, para los choques
-  {
+  if (!SENCILLO) {
     // dos ruedas apiladas delante del morro
     for (let k = 0; k < 2; k++) {
       const g = new THREE.TorusGeometry(0.24, 0.1, 10, 20).rotateX(Math.PI / 2).scale(1, 1.05, 1).translate(-17.42, 0.105 + k * 0.205, 1.75);
@@ -585,7 +592,7 @@ export function crearMuro4(scene) {
   for (const [x0, x1, z0, z1, top] of ESCALON) caja2(x0, x1, z0, z1, top);
 
   // ================================================================== SALTADERO 2: bidones, pales y una cuerda de nudos
-  {
+  if (!SENCILLO) {
     const x = SALT2;
     bidon(L, x - 0.6, 0, 1.25, { fila: 1, semilla: 3 }); bidon(L, x + 0.05, 0, 1.15, { fila: 3, semilla: 4 }); bidon(L, x - 0.3, 0.88, 1.2, { fila: 2, semilla: 5 });
     pale(L, x + 0.9, 0, 1.6, 0.2); pale(L, x + 0.9, 0.144, 1.62, 0.15);
@@ -663,7 +670,7 @@ export function crearMuro4(scene) {
   }
 
   // ================================================================== FUERA: concertina, erizos, arboles secos, torres
-  {
+  if (!SENCILLO) {
     // la concertina por el borde de fuera del foso, cortada en el saltadero y en la carretera; piquetes cada 4 m
     const zc = -5.0;
     const tramos = [[-46, -12.25], [-10.65, -5.4], [5.4, 46]];
@@ -981,8 +988,8 @@ export function crearMuro4(scene) {
     const LP = aguaU.uLP.value, LC = aguaU.uLC.value;
     LP[0].copy(fuego.luz.position); LC[0].set(1.0, 0.55, 0.25).multiplyScalar(fuego.luz.intensity / 9);
     LP[1].copy(aplique.position); LC[1].set(1.0, 0.8, 0.6);
-    LP[2].copy(focos[0].position); LC[2].set(2.2, 2.3, 2.4);
-    LP[3].copy(focos[1].position); LC[3].set(2.2, 2.3, 2.4);
+    if (focos[0]) { LP[2].copy(focos[0].position); LC[2].set(2.2, 2.3, 2.4); }
+    if (focos[1]) { LP[3].copy(focos[1].position); LC[3].set(2.2, 2.3, 2.4); }
     void cam; void _v;
   }
 

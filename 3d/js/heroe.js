@@ -1,4 +1,4 @@
-// El 18: el .glb de escuela/obras/sujeto18_3d (piel, 51 huesos, 8 clips) con el acabado de tinta del visor
+// El 18: el .glb de escuela/obras/sujeto18_3d (piel, 32 huesos, 9 clips; sin capa desde el 2026-10-22) con el acabado de tinta del visor
 // (MeshToonMaterial con el color horneado en dos escalones y el casco de tinta que trae el .glb) y su CONTROL en
 // tercera persona: andar / correr relativos a la camara, salto, gestos, gravedad y choques en planta.
 //
@@ -16,6 +16,7 @@ const ZANCADA = { andar: 0.27 * 1.0, correr: 1.358 * 0.6 };
 const ANDAR = { v: 0.45 };
 const CORRER = { v: 1.8 };
 const ESCALON = 0.3;           // lo que se sube andando (las cajas con `ytop`: el pie del muro exterior, los trastos)
+const ALTO_18 = 1.25;           // lo que mide el 18 con la capucha: por debajo de una caja con `ybot` mas alta, pasa
 const TREPA = 0.36;            // en el aire, un borde (caja con `ytop`) hasta esto por encima de los pies se agarra y se sube
 const RADIO = 0.24;            // planta del 18 para los choques (la capa abierta mide ~0,5 m)
 const GRAVEDAD = 9.8;
@@ -30,6 +31,7 @@ const RECUERDA_SALTO = 0.12;   // s que se recuerda un salto pedido un pelin ant
 const CORTE_SALTO = 0.45;      // al soltar el espacio subiendo, la velocidad hacia arriba se queda en esto
 const INCLINA_MAX = 0.2, CABECEA_MAX = 0.12;  // rad: el cuerpo se tumba hacia dentro en las curvas y con el empuje
 const GESTOS = { 1: 'saludar', 2: 'mirar_arriba', 3: 'respingo', 4: 'bajar' };
+const QUIETO_MIRA = 7;          // s quieto antes de mirar a los lados
 const PIERNAS = [['thigh_l', 'calf_l', 'foot_l', 'ball_l'], ['thigh_r', 'calf_r', 'foot_r', 'ball_r']];
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
@@ -74,6 +76,8 @@ export function cargarHeroe(scene, mundo) {
     // de las rodillas al caer
     rapidez: 0, fase: 0, inclina: 0, cabecea: 0, coyote: 0, pedido: 0, sostenido: false,
     flex: { y: 0, v: 0 },
+    // segundos que lleva quieto: a los QUIETO_MIRA mira a los lados (clip mirar_alrededor, si el .glb lo trae)
+    quieto: 0,
   };
   H.pos.y = mundo.altura(H.pos.x, H.pos.z);
 
@@ -213,6 +217,8 @@ export function cargarHeroe(scene, mundo) {
       // una caja con `ytop` se pisa (el muro exterior: el pie de la T, la tapa, los trastos del saltadero): por encima de
       // su tapa no choca, y andando se sube sola si no pasa de un escalon
       if (b.ytop != null && H.pos.y >= b.ytop - (H.suelo ? ESCALON : 0.03)) continue;
+      // y con `ybot` (la pasarela de la planta de encima, un peldano alto): por debajo, si cabe, no choca
+      if (b.ybot != null && H.pos.y + ALTO_18 < b.ybot) continue;
       const ca = Math.cos(b.ang), sa = Math.sin(b.ang);
       const lx = (p.x - b.x) * ca + (p.z - b.z) * sa, lz = -(p.x - b.x) * sa + (p.z - b.z) * ca;
       const cx = Math.max(-b.hx, Math.min(b.hx, lx)), cz = Math.max(-b.hz, Math.min(b.hz, lz));
@@ -348,6 +354,13 @@ export function cargarHeroe(scene, mundo) {
     if (entrada.gesto && H.suelo && !H.saltando && H.rapidez < 0.05) {
       const n = GESTOS[entrada.gesto];
       if (n && H.acciones[n]) { H.gesto = n; poner(n, 0.2); }
+    }
+    // un rato quieto: mira a su alrededor (como un gesto: cualquier tecla lo corta)
+    const parado = H.suelo && !H.saltando && !H.gesto && pide < 0.03 && H.rapidez < 0.05;
+    H.quieto = parado ? H.quieto + dt : 0;
+    if (H.quieto > QUIETO_MIRA && H.acciones.mirar_alrededor) {
+      H.gesto = 'mirar_alrededor'; poner('mirar_alrededor', 0.45);
+      H.quieto = -Math.random() * 6;
     }
     if (H.saltando && H.suelo && H.acciones.salto.time > 1.0) { H.saltando = 0; poner(null, 0.15); }
     if (!H.saltando && !H.gesto && unaVez) poner(null, 0.15);

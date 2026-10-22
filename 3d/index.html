@@ -26,10 +26,28 @@
   <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> correr &nbsp; <kbd>Mayús</kbd> andar &nbsp; <kbd>Espacio</kbd> saltar</div>
   <div><kbd>1</kbd> saludar &nbsp; <kbd>2</kbd> mirar arriba &nbsp; <kbd>3</kbd> respingo &nbsp; <kbd>4</kbd> bajar la cabeza</div>
   <div>ratón: girar la cámara (clic para fijarlo, <kbd>Esc</kbd> para soltar) · rueda: acercar · <kbd>H</kbd> ocultar</div>
-  <div><kbd>P</kbd> física de la capa: <span id="fisica">sí</span> &nbsp; <kbd>N</kbd> sonido</div>
+  <div><kbd>P</kbd> física de la capucha: <span id="fisica">sí</span> &nbsp; <kbd>N</kbd> sonido</div>
   <div style="opacity:.6;font-size:11px">sonidos: congusbongus (CC-BY 3.0, con swuing y EminYILDIRIM), Fantozzi, isaiah658 y Thimras (CC0) · <a href="sonidos/CREDITOS.txt" style="color:inherit">créditos</a></div>
 </div>
 <div id="carga">CARGANDO…</div>
+<script>
+// La pantalla de carga dice POR QUE no carga (2026-10-21: se quedaba en verde sin decir nada, el error solo iba a la
+// consola): el primer error o promesa rechazada se escribe aqui, y mientras carga cuenta los segundos y los ficheros.
+(() => {
+  const c = document.getElementById('carga'), t0 = performance.now();
+  let fallo = null;
+  // (tambien despues de cargar: si un fotograma falla, el bucle se para y solo queda el fondo verde del body)
+  const poner = (m) => { if (!fallo) { fallo = m; if (!c.isConnected) document.body.appendChild(c); c.style.cssText += ';letter-spacing:0;white-space:pre-wrap;text-align:center;padding:24px;font:13px/1.6 Consolas,monospace'; c.textContent = 'NO HA CARGADO\n\n' + m + '\n\n(F12 > Consola para mas detalle)'; } };
+  addEventListener('error', (e) => poner((e.message || 'error') + (e.filename ? '\n' + e.filename.replace(location.origin, '') + ':' + e.lineno : '')), true);
+  addEventListener('unhandledrejection', (e) => poner(String(e.reason && (e.reason.stack || e.reason.message) || e.reason).slice(0, 600)));
+  addEventListener('error', (e) => { const el = e.target; if (el && el !== window && (el.src || el.href)) poner('no se pudo bajar ' + (el.src || el.href)); }, true);
+  const tic = setInterval(() => {
+    if (!document.getElementById('carga') || fallo) return clearInterval(tic);
+    const s = Math.round((performance.now() - t0) / 1000);
+    if (s >= 3) c.textContent = 'CARGANDO… ' + s + ' s · ' + performance.getEntriesByType('resource').length + ' ficheros';
+  }, 1000);
+})();
+</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

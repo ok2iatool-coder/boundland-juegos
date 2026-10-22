@@ -179,6 +179,7 @@ export function crearMuralla(grupo) {
   for (const id of ids) {
     const g = new THREE.PlaneGeometry(LARGO, ALTO_FOTO).rotateY(Math.PI / 2).translate(0.06, ALTO_FOTO / 2, 0);
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, alphaTest: 0.5, side: THREE.FrontSide });
+    mat.userData.foto = true;          // la luz va horneada en la foto: horas.js la tine segun la hora
     const im = new THREE.InstancedMesh(g, mat, caras.length);
     im.count = 0; im.frustumCulled = false; im.visible = false;
     raiz.add(im);

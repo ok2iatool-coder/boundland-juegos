@@ -72,5 +72,15 @@ export function crearSonido() {
     viento.g.gain.setTargetAtTime(0.16 * fuera, t, 0.5);
     viento.fl.frequency.setTargetAtTime(380 + 160 * Math.sin(t * 0.3), t, 0.5);
   }
-  return { iniciar, golpe, raya, paso, pieza, ambiente };
+  // algo grande que pasa muy cerca (el tronco de la cortina del paso por el bosque): un soplo de ruido grave que crece y se va
+  function pasa(d = 1.4) {
+    if (!A) return;
+    const t = A.currentTime;
+    const s = A.createBufferSource(); s.buffer = ruido;
+    const f = A.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.7;
+    f.frequency.setValueAtTime(260, t); f.frequency.linearRampToValueAtTime(520, t + d * 0.5); f.frequency.linearRampToValueAtTime(220, t + d);
+    const g = A.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + d * 0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    s.connect(f).connect(g).connect(A.destination); s.start(t, Math.random()); s.stop(t + d + 0.05);
+  }
+  return { iniciar, golpe, raya, paso, pieza, ambiente, pasa };
 }

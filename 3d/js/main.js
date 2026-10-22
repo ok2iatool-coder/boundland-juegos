@@ -160,13 +160,15 @@ function entrada() {
 const DBG = { teclas: new Set(), congelado: false };
 const reloj = new THREE.Timer();   // Clock esta obsoleto en three 0.185
 let t = 0;
+// un mapa con su propio pase (el mundo: la neblina, mundo/neblina.js) pinta el solo
+const pintar = () => (mundo.pintar ? mundo.pintar(renderer, scene, cam, t) : renderer.render(scene, cam));
 function fotograma(dt) {
   t += dt;
   heroe.paso(dt, entrada(), C.yaw);
   camara(dt);
   mundo.actualizar(t, heroe.pos, heroe, dt);
   sonido.paso(dt, heroe, mundo, cam);
-  renderer.render(scene, cam);
+  pintar();
 }
 function bucle() {
   reloj.update();
@@ -192,7 +194,7 @@ window.__dbg = {
   camara(yaw, pitch, dist) { if (yaw != null) C.yaw = yaw; if (pitch != null) C.pitch = pitch; if (dist != null) C.dist = dist; },
   async qa() { const m = await import('./qa.js'); return m.auditar(window.__dbg); },
   async snap(nombre) {
-    renderer.render(scene, cam);
+    pintar();
     const b = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.9));
     await fetch('/__snap/' + nombre, { method: 'PUT', body: b });
     return nombre;

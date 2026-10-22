@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Boundland · del 2D al 3D</title>
+<title>Boundland · al 3D por el bosque</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root { color-scheme: dark; }
@@ -13,6 +13,7 @@
   #ayuda { position: fixed; left: 18px; bottom: 16px; line-height: 1.8; opacity: .85; text-shadow: 0 1px 4px rgba(0,0,0,.8); pointer-events: none; }
   #ayuda kbd { display: inline-block; min-width: 14px; padding: 0 5px; margin-right: 3px; border: 1px solid rgba(255,255,255,.4); border-radius: 4px; font: 11px/16px inherit; text-align: center; }
   #ayuda .fijo { opacity: .6; font-size: 11px; }
+  #ayuda a { color: inherit; pointer-events: auto; }
   .oculto { display: none !important; }
   #relleno { position: fixed; right: 18px; top: 14px; font-size: 11px; letter-spacing: .12em; opacity: 0; transition: opacity 1.2s; color: #dfe6ec; text-shadow: 0 1px 4px rgba(0,0,0,.6); pointer-events: none; }
   #relleno.visible { opacity: .75; }
@@ -25,12 +26,9 @@
 </head>
 <body>
 <canvas id="vista"></canvas>
-<div id="titulo">BOUNDLAND · PRUEBA<b>DEL 2D AL 3D</b></div>
-<div id="relleno">RELLENO · AQUÍ IRÁ LA CIUDAD</div>
-<div id="ayuda"><div id="teclas"></div><div class="fijo"><kbd>R</kbd> repetir &nbsp; <kbd>M</kbd> medidor &nbsp; <kbd>H</kbd> ocultar</div></div>
-<canvas id="medidor" width="360" height="110" class="oculto"></canvas>
+<div id="titulo">BOUNDLAND · PRUEBA<b>DEL 2D AL 3D · EL BOSQUE</b></div>
+<div id="ayuda"><div id="teclas"></div><div class="fijo"><kbd>R</kbd> repetir &nbsp; <kbd>H</kbd> ocultar &nbsp; <a href="conducto.html">el paso del conducto</a></div></div>
 <div id="carga">CARGANDO…</div>
-<script>if (/[?&]medir/.test(location.search)) document.getElementById('medidor').classList.remove('oculto');</script>
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/bosque/main.js"></script>
 </body>
 </html>

@@ -64,7 +64,7 @@ const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(positi
 const FRAG = /* glsl */`
   precision highp float;
   uniform sampler2D tProf; uniform mat4 uInvProy, uCamMundo; uniform vec3 uCam, uFrente, uAmb;
-  uniform float uNear, uFar, uT, uK, uLejos;
+  uniform float uNear, uFar, uT, uK, uLejos, uInicio;
   uniform vec3 uPL[${NL}], uPC[${NL}];
   uniform vec3 uSP[${NS}], uSD[${NS}], uSC[${NS}]; uniform vec2 uSA[${NS}];
   varying vec2 vUv;
@@ -86,13 +86,15 @@ const FRAG = /* glsl */`
   void main() {
     vec4 v = uInvProy * vec4(vUv * 2.0 - 1.0, 1.0, 1.0); v /= v.w;
     vec3 dir = normalize((uCamMundo * vec4(v.xyz, 0.0)).xyz);
-    float tMax = min(linZ(texture2D(tProf, vUv).r) / max(dot(dir, uFrente), 1e-3), uLejos);
+    // (uInicio: donde empieza el rayo; con el teleobjetivo del paso a 3D la camara esta a 258 m y no hay que contar esa
+    // bruma: bosque/main.js lo pone cerca de lo que se mira. 0 = desde la camara)
+    float tMax = min(linZ(texture2D(tProf, vUv).r) / max(dot(dir, uFrente), 1e-3), uInicio + uLejos);
     float j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     const int N = 30;
     float T = 1.0; vec3 L = vec3(0.0);
     for (int i = 0; i < N; i++) {
       float u0 = float(i) / float(N), u1 = float(i + 1) / float(N);
-      float tA = tMax * u0 * u0, tB = tMax * u1 * u1, dt = tB - tA;
+      float tA = uInicio + max(0.0, tMax - uInicio) * u0 * u0, tB = uInicio + max(0.0, tMax - uInicio) * u1 * u1, dt = tB - tA;
       vec3 x = uCam + dir * mix(tA, tB, j);
       float s = densidadAire(x, uT) * uK;
       if (s < 1e-6) continue;
@@ -105,7 +107,7 @@ const FRAG = /* glsl */`
     float tw0 = 0.0, tw1 = tMax;
     if (abs(dir.z) > 1e-4) {
       float ta = (z0 - uCam.z) / dir.z, tb = (z1 - uCam.z) / dir.z;
-      tw0 = max(0.0, min(ta, tb)); tw1 = min(tMax, max(ta, tb));
+      tw0 = max(uInicio, min(ta, tb)); tw1 = min(tMax, max(ta, tb));
     } else if (uCam.z < z0 || uCam.z > z1) tw1 = -1.0;
     if (tw1 > tw0) {
       const int NM = 14;
@@ -122,8 +124,8 @@ const FRAG = /* glsl */`
     }
     // lo de mas alla de uLejos, con la luz del cielo
     float tFin = min(linZ(texture2D(tProf, vUv).r) / max(dot(dir, uFrente), 1e-3), 1500.0);
-    if (tFin > uLejos) {
-      float Tl = exp(-opticoLejos(uCam, dir, uLejos, tFin) * uK);
+    if (tFin > uInicio + uLejos) {
+      float Tl = exp(-opticoLejos(uCam, dir, uInicio + uLejos, tFin) * uK);
       L += T * uAmb * (1.0 - Tl); T *= Tl;
     }
     gl_FragColor = vec4(L, T);
@@ -138,7 +140,7 @@ export function crearNiebla4({ ambiente, luces = [], focos = [], lejos = 85 }) {
   const u = {
     tProf: { value: null }, uInvProy: { value: new THREE.Matrix4() }, uCamMundo: { value: new THREE.Matrix4() },
     uCam: { value: new THREE.Vector3() }, uFrente: { value: new THREE.Vector3() }, uAmb: { value: vec(ambiente, 1) },
-    uNear: { value: 0.1 }, uFar: { value: 100 }, uT: { value: 0 }, uK: { value: 1 }, uLejos: { value: lejos },
+    uNear: { value: 0.1 }, uFar: { value: 100 }, uT: { value: 0 }, uK: { value: 1 }, uLejos: { value: lejos }, uInicio: { value: 0 },
     uPL: { value: Array.from({ length: NL }, (_, k) => (luces[k] ? luces[k].p.clone() : new THREE.Vector3(0, -999, 0))) },
     uPC: { value: Array.from({ length: NL }, (_, k) => (luces[k] ? vec(luces[k].color, luces[k].i) : new THREE.Vector3())) },
     uSP: { value: Array.from({ length: NS }, (_, k) => (focos[k] ? focos[k].p.clone() : new THREE.Vector3(0, -999, 0))) },
@@ -149,8 +151,8 @@ export function crearNiebla4({ ambiente, luces = [], focos = [], lejos = 85 }) {
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: u, vertexShader: VERT, fragmentShader: FRAG, depthTest: false, depthWrite: false }));
   quad.frustumCulled = false;
   escena.add(quad);
-  function actualizar(t, camara, k) {
-    u.uT.value = t; u.uK.value = k;
+  function actualizar(t, camara, k, inicio = 0) {
+    u.uT.value = t; u.uK.value = k; u.uInicio.value = inicio;
     camara.updateMatrixWorld();
     u.uInvProy.value.copy(camara.projectionMatrixInverse);
     u.uCamMundo.value.copy(camara.matrixWorld);

@@ -22,7 +22,17 @@ import { crearMuralla } from './muralla.js';
 import { crearCimientos, alturaObra } from './cimientos.js';
 import { crearExterior } from './exterior.js';
 import { crearMacro } from './macro.js';
+import { crearTorres } from './torres.js';
+import { crearDetalleSuelo } from './detalle_suelo.js';
 import { TONO } from './tono.js';
+import { DIR_SOL, COLOR_SOL } from './luz.js';
+import { crearHoras } from './horas.js';
+import { crearNeblina } from './neblina.js';
+import { crearMotas } from './motas.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 export const LADO = R.LADO;
 
@@ -32,26 +42,34 @@ export function crearMundo(scene) {
   grupo.name = 'mundo';
   scene.add(grupo);
 
-  // la luz de media tarde y una bruma fina (a la escala del mundo: a 3 km la mitad del color es bruma)
-  const DIR_SOL = new THREE.Vector3(-0.5, 0.68, 0.53).normalize();
+  // la luz de media tarde y una bruma fina (a la escala del mundo: a 3 km la mitad del color es bruma); el sol en luz.js
   scene.background = BRUMA.clone();
   const BRUMA_DENSIDAD = 0.00022;
   const BRUMA_NORTE = new THREE.Color(0xaeb6b4), LUZ_NORTE = new THREE.Color(0xdfe6ea);   // v8: el norte, mas frio
   const _bruma = new THREE.Color(), _luz = new THREE.Color();
   scene.fog = new THREE.FogExp2(BRUMA, BRUMA_DENSIDAD);
   const cielo = new THREE.HemisphereLight(0xf3efd6, 0x55603a, 1.55);
-  const sol = new THREE.DirectionalLight(0xffe3b2, 2.7);
+  const sol = new THREE.DirectionalLight(COLOR_SOL, 2.7);
+  // SOMBRAS (21-10, «sube la calidad»): 4096 sobre 150 m (3,7 cm por texel) por DELANTE de la camara, no 64 m alrededor
+  // del 18, y la camara de la sombra a 450 m sol arriba: las torres y el macroedificio echan su sombra entera (con el sol
+  // a 22 grados, larga). El sesgo va en profundidad normalizada: con 1000 m de fondo, -0,00012 son 12 cm.
+  const SOMBRA_LADO = 75, SOMBRA_DELANTE = 45, SOMBRA_ATRAS = 450;
   sol.castShadow = true;
-  sol.shadow.mapSize.set(2048, 2048);
-  Object.assign(sol.shadow.camera, { near: 1, far: 260, left: -32, right: 32, top: 32, bottom: -32 });
-  sol.shadow.bias = -0.0006;
-  sol.shadow.normalBias = 0.05;
+  sol.shadow.mapSize.set(4096, 4096);
+  Object.assign(sol.shadow.camera, { near: 1, far: SOMBRA_ATRAS + 550, left: -SOMBRA_LADO, right: SOMBRA_LADO, top: SOMBRA_LADO, bottom: -SOMBRA_LADO });
+  sol.shadow.bias = -0.00012;
+  sol.shadow.normalBias = 0.04;
   scene.add(cielo, sol, sol.target);
   const _ejeU = new THREE.Vector3().crossVectors(DIR_SOL, new THREE.Vector3(0, 1, 0)).normalize();
   const _ejeV = new THREE.Vector3().crossVectors(_ejeU, DIR_SOL).normalize();
-  const _foco = new THREE.Vector3();
+  const _foco = new THREE.Vector3(), _mira = new THREE.Vector3(), _arriba = new THREE.Vector3(0, 1, 0);
 
   const boveda = crearCielo(scene, DIR_SOL);
+  // las HORAS DEL DIA (tecla T): cambian el sol, el cielo, la bruma y lo que tiene la luz horneada (horas.js)
+  // la NEBLINA (un medio por rayo, pegado al terreno: neblina.js) y lo que FLOTA (polvo de dia, luciernagas de noche)
+  const neblina = crearNeblina();
+  const motas = crearMotas({ grupo, altura: (x, z) => R.altura(x, z) });
+  const horas = crearHoras({ scene, sol, cielo, neblina, motas });
   const suelo = crearSuelo(grupo, TONO);
   suelo.actualizar(R.SALIDA, true);          // los trozos de alrededor de la salida, ya
   const rocas = crearRocas(grupo, TONO);
@@ -59,13 +77,15 @@ export function crearMundo(scene) {
   const agua = crearAgua(grupo, TONO);
   const muralla = crearMuralla(grupo);
   const hierba = crearHierba({ grupo, camara: () => enlaces.cam });
+  const detalle = crearDetalleSuelo({ grupo, tono: TONO });   // piedras, chinas, hojas y ramitas (21-10, como la parcela)
   const cajas = [];
   const cimientos = crearCimientos(grupo, cajas);   // la obra de la ciudad: antes que la hierba se haga
   const exterior = crearExterior(grupo, cajas);     // el muro de 4 m, a 300 m del grande (21-10)
   exterior.recortarSuelo(suelo.material);
   const macro = crearMacro(grupo, cajas);           // el macroedificio de El Panal sur (21-10)
+  const torres = crearTorres(grupo, cajas);         // las torres de refugio (torre_outpost apilada, 21-10)
   let plano = null;
-  const modelos = crearModelos({ grupo, cajas, alCambiar: (x0, z0, x1, z1) => { hierba.tirarZona(x0, z0, x1, z1); if (plano) plano.rehacer(); } });
+  const modelos = crearModelos({ grupo, cajas, alCambiar: (x0, z0, x1, z1) => { hierba.tirarZona(x0, z0, x1, z1); detalle.tirarZona(x0, z0, x1, z1); if (plano) plano.rehacer(); } });
   const msCarga = Math.round(performance.now() - t0);
 
   // el nombre del sitio (arriba a la izquierda, debajo del titulo)
@@ -101,6 +121,7 @@ export function crearMundo(scene) {
     if (H.reiniciarCuerpo) H.reiniciarCuerpo();
     if (enlaces.camara) enlaces.camara.lista = false;
     hierba.actualizar(ultimoT, H.pos, H, 0, true);
+    detalle.actualizar(H.pos, true);
   }
   let editor = null;
   plano = crearPlano({ alIr: ir });
@@ -109,6 +130,7 @@ export function crearMundo(scene) {
   editor.alIr18((x, z) => { editor.salir(); ir(x, z); });
   function tecla(e, abajo) {
     if (abajo && e.code === 'KeyM' && !e.ctrlKey) { plano.abierto ? plano.cerrar() : plano.abrir(); return true; }
+    if (abajo && e.code === 'KeyT' && !e.ctrlKey && !editor.activo && !plano.abierto) { horas.siguiente(); return true; }
     if (plano.abierto) {
       if (abajo && e.code === 'Escape') { plano.cerrar(); return true; }
       return abajo && /^(Key[WASDE]|Arrow|Space|Digit)/.test(e.code);
@@ -118,26 +140,40 @@ export function crearMundo(scene) {
   function actualizar(t, foco, heroe = null, dt = 0) {
     ultimoT = t;
     if (editor.activo) foco = editor.paso(dt);
-    else if (scene.fog.density !== BRUMA_DENSIDAD) scene.fog.density = BRUMA_DENSIDAD;
+    else if (scene.fog.density !== horas.densidad) scene.fog.density = horas.densidad;
     suelo.actualizar(foco);
     if (suelo.pendiente) suelo.pintarPendiente(editor.activo ? 7 : 3);
     if (plano.abierto) plano.actualizar(editor.activo ? foco : heroe ? heroe.pos : foco, editor.activo ? editor.S.yaw + Math.PI : heroe ? heroe.giro : 0);
+    // el centro de la sombra, SOMBRA_DELANTE m hacia donde mira la camara (en planta), ajustado al texel para que no tiemble
+    _foco.copy(foco);
+    if (enlaces.cam && !editor.activo) {
+      enlaces.cam.getWorldDirection(_mira); _mira.y = 0;
+      if (_mira.lengthSq() > 1e-6) _foco.addScaledVector(_mira.normalize(), SOMBRA_DELANTE);
+    }
+    // los ejes del plano de la luz, con el sol de la hora (cambia al pasar de una a otra)
+    horas.actualizar(dt, foco);
+    motas.actualizar(t, dt, foco);
+    _ejeU.crossVectors(DIR_SOL, _arriba).normalize();
+    _ejeV.crossVectors(_ejeU, DIR_SOL).normalize();
     const texel = (sol.shadow.camera.right - sol.shadow.camera.left) / sol.shadow.mapSize.x;
-    const u = _ejeU.dot(foco), w = _ejeV.dot(foco);
-    _foco.copy(foco).addScaledVector(_ejeU, Math.round(u / texel) * texel - u).addScaledVector(_ejeV, Math.round(w / texel) * texel - w);
-    sol.position.copy(_foco).addScaledVector(DIR_SOL, 120);
+    const u = _ejeU.dot(_foco), w = _ejeV.dot(_foco);
+    _foco.addScaledVector(_ejeU, Math.round(u / texel) * texel - u).addScaledVector(_ejeV, Math.round(w / texel) * texel - w);
+    sol.position.copy(_foco).addScaledVector(DIR_SOL, SOMBRA_ATRAS);
     sol.target.position.copy(_foco);
     boveda.actualizar(t, foco);
     // v8: al cruzar al norte la bruma y la luz del cielo se enfrian
     const nn = R.norte(foco.x, foco.z);
-    _bruma.copy(BRUMA).lerp(BRUMA_NORTE, 0.75 * nn);
+    // (de noche el norte no aclara la bruma)
+    _bruma.copy(horas.bruma).lerp(BRUMA_NORTE, 0.75 * nn * (1 - horas.noche));
     scene.fog.color.copy(_bruma);
     scene.background.copy(_bruma);
-    cielo.color.copy(_luz.set(0xf3efd6).lerp(LUZ_NORTE, 0.6 * nn));
+    cielo.color.copy(horas.luzCielo).lerp(LUZ_NORTE, 0.6 * nn * (1 - horas.noche));
     agua.actualizar(t, dt);
     muralla.actualizar(foco);
     exterior.actualizar(foco, editor.activo ? null : heroe);
+    torres.actualizar(editor.activo ? null : heroe, foco);
     hierba.actualizar(t, foco, heroe, dt);
+    detalle.actualizar(foco);
     cadaZona -= dt;
     if (cadaZona <= 0) {
       cadaZona = 0.4;
@@ -157,7 +193,8 @@ export function crearMundo(scene) {
   const puntoCamino = (tt) => ({ x: R.SALIDA.x, z: R.SALIDA.z - tt * 80, tx: 0, tz: -1 });
 
   return {
-    LADO, borde: 1e4, limitar, altura: (x, z) => exterior.altura(x, z, R.altura(x, z) + alturaObra(x, z)), actualizar, puntoCamino, sol, hierba, agua,
+    horas, neblina, LADO, borde: 1e4, limitar,
+    pintar: (renderer, sc, cam, t) => neblina.pintar(renderer, sc, cam, t), altura: (x, z) => torres.altura(x, z, exterior.altura(x, z, R.altura(x, z) + alturaObra(x, z))), actualizar, puntoCamino, sol, hierba, agua,
     choques: { circulos: CHOQUES_ROCAS, cajas },
     salida: R.SALIDA,
     titulo: 'EL MUNDO', lejos: 14000, cerca: 0.1,
@@ -165,10 +202,10 @@ export function crearMundo(scene) {
     muralla, exterior, tecla, bloqueado: () => plano.abierto || editor.activo, plano, ir, editor, modelos,
     raton: (tipo, e) => editor.raton(tipo, e),
     ayuda: `<div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> correr &nbsp; <kbd>Mayús</kbd> andar &nbsp; <kbd>Espacio</kbd> saltar &nbsp; <kbd>1</kbd>-<kbd>4</kbd> gestos</div>
-      <div><kbd>M</kbd> mapa del mundo: clic en un sitio y el 18 aparece allí</div>
+      <div><kbd>M</kbd> mapa del mundo: clic en un sitio y el 18 aparece allí &nbsp; <kbd>T</kbd> hora del día</div>
       <div><kbd>E</kbd> editor: subir, bajar, allanar, suavizar, pintar (también nieve), rocas y modelos 3D</div>
       <div>ratón: cámara (clic para fijarlo, <kbd>Esc</kbd> para soltar) · rueda: acercar · <kbd>H</kbd> ocultar</div>`,
     zona: R.zona,
-    get info() { return { msCarga, rocas: ROCAS.length, ...suelo.info(), ...rocas.info(), ...agua.info(), ...modelos.info(), ...hierba.info(), ...muralla.info(), ...cimientos.info(), ...exterior.info(), ...macro.info(), zona: zonaAhora }; },
+    get info() { return { msCarga, rocas: ROCAS.length, ...suelo.info(), ...rocas.info(), ...agua.info(), ...modelos.info(), ...hierba.info(), ...muralla.info(), ...cimientos.info(), ...exterior.info(), ...macro.info(), ...torres.info(), ...detalle.info(), ...horas.info(), zona: zonaAhora }; },
   };
 }

@@ -1,0 +1,5 @@
+Texturas de Poly Haven (https://polyhaven.com), licencia CC0 (dominio publico), descargadas el 2026-10-21:
+  tierra_*    = Forest Ground 06 (Charlotte Baglioni)  https://polyhaven.com/a/forest_ground_06
+  hojarasca_* = Forest Leaves 02                       https://polyhaven.com/a/forest_leaves_02
+  hierba_*    = Sparse Grass                           https://polyhaven.com/a/sparse_grass
+color a 2K; normal (OpenGL), arm (AO, rugosidad, metal) y relieve a 1K.
