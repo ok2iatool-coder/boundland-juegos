@@ -597,6 +597,7 @@ function pintarCapa18(camJ) {
   carton.malla.rotation.y = tres ? C.yaw : -Math.PI / 2;
 }
 function dibujar() {
+  bosque.arbustos.actualizar(cam.position, E.t);       // los arbustos a su LOD y su viento
   // la pose del 18 (la pinta el 2D o la capa del 18)
   {
     const fr = E.pose, a = sprites.datos.anims[fr];

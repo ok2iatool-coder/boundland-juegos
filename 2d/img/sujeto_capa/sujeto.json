@@ -1,0 +1,730 @@
+{
+ "px_por_metro": 336.3999999999999,
+ "anims": {
+  "ataque": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    336,
+    398
+   ],
+   "pies": [
+    156.5,
+    365.0
+   ]
+  },
+  "ataque_arriba": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 20,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    308,
+    391
+   ],
+   "pies": [
+    180.0,
+    367.5
+   ]
+  },
+  "ataque_abajo": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 20,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    319,
+    395
+   ],
+   "pies": [
+    139.0,
+    372.0
+   ]
+  },
+  "dano": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 14,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    266,
+    359
+   ],
+   "pies": [
+    180.0,
+    342.0
+   ]
+  },
+  "trepar": {
+   "fotogramas": 8,
+   "cols": 8,
+   "fps": 10,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    215,
+    392
+   ],
+   "pies": [
+    88.0,
+    362.0
+   ]
+  },
+  "caer": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 10,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    236,
+    361
+   ],
+   "pies": [
+    131.5,
+    343.0
+   ]
+  },
+  "leer": {
+   "fotogramas": 8,
+   "cols": 8,
+   "fps": 6,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    227,
+    395
+   ],
+   "pies": [
+    90.5,
+    377.0
+   ]
+  },
+  "reposo": {
+   "fotogramas": 16,
+   "cols": 8,
+   "fps": 8,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    222,
+    381
+   ],
+   "pies": [
+    109.0,
+    363.5
+   ]
+  },
+  "andar": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 14,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    228,
+    392
+   ],
+   "pies": [
+    102.5,
+    363.0
+   ]
+  },
+  "salto": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 12,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    260,
+    406
+   ],
+   "pies": [
+    125.0,
+    365.5
+   ]
+  },
+  "aterriza": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 18,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    226,
+    394
+   ],
+   "pies": [
+    88.0,
+    354.5
+   ]
+  },
+  "flotar": {
+   "fotogramas": 32,
+   "cols": 8,
+   "fps": 12,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    246,
+    408
+   ],
+   "pies": [
+    104.5,
+    387.5
+   ]
+  },
+  "intro": {
+   "fotogramas": 60,
+   "cols": 8,
+   "fps": 12,
+   "bucle": false,
+   "vista": "frente",
+   "fotograma": [
+    422,
+    418
+   ],
+   "pies": [
+    100.44,
+    381.0
+   ]
+  },
+  "reposo2": {
+   "fotogramas": 24,
+   "cols": 8,
+   "fps": 12,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    220,
+    382
+   ],
+   "pies": [
+    108.0,
+    364.5
+   ]
+  },
+  "correr": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 22,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    264,
+    394
+   ],
+   "pies": [
+    119.0,
+    366.0
+   ]
+  },
+  "arranque": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 20,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    269,
+    384
+   ],
+   "pies": [
+    111.0,
+    357.5
+   ]
+  },
+  "frenar": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 18,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    250,
+    391
+   ],
+   "pies": [
+    145.5,
+    357.0
+   ]
+  },
+  "giro": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    228,
+    383
+   ],
+   "pies": [
+    104.0,
+    361.5
+   ]
+  },
+  "despegue": {
+   "fotogramas": 2,
+   "cols": 2,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    249,
+    408
+   ],
+   "pies": [
+    110.5,
+    368.0
+   ]
+  },
+  "subir": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 10,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    234,
+    362
+   ],
+   "pies": [
+    137.0,
+    343.5
+   ]
+  },
+  "cumbre": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 14,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    217,
+    384
+   ],
+   "pies": [
+    97.0,
+    365.0
+   ]
+  },
+  "caer2": {
+   "fotogramas": 8,
+   "cols": 8,
+   "fps": 12,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    220,
+    378
+   ],
+   "pies": [
+    109.5,
+    360.0
+   ]
+  },
+  "aterriza_fuerte": {
+   "fotogramas": 5,
+   "cols": 5,
+   "fps": 16,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    252,
+    400
+   ],
+   "pies": [
+    93.0,
+    360.0
+   ]
+  },
+  "doble": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 22,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    293,
+    392
+   ],
+   "pies": [
+    153.5,
+    373.5
+   ]
+  },
+  "ataque2": {
+   "fotogramas": 5,
+   "cols": 5,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    338,
+    406
+   ],
+   "pies": [
+    158.5,
+    366.0
+   ]
+  },
+  "dash": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 20,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    282,
+    396
+   ],
+   "pies": [
+    101.5,
+    368.0
+   ]
+  },
+  "muerte": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 10,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    360,
+    402
+   ],
+   "pies": [
+    180.0,
+    361.5
+   ]
+  },
+  "zorro_reposo": {
+   "fotogramas": 24,
+   "cols": 8,
+   "fps": 12,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    290,
+    376
+   ],
+   "pies": [
+    177.5,
+    360.5
+   ]
+  },
+  "zorro_correr": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 26,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    334,
+    374
+   ],
+   "pies": [
+    180.0,
+    362.0
+   ]
+  },
+  "zorro_despegue": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    314,
+    378
+   ],
+   "pies": [
+    173.0,
+    365.5
+   ]
+  },
+  "zorro_subir": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 10,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    312,
+    376
+   ],
+   "pies": [
+    177.0,
+    354.5
+   ]
+  },
+  "zorro_cumbre": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 14,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    286,
+    374
+   ],
+   "pies": [
+    165.5,
+    355.5
+   ]
+  },
+  "zorro_caer": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 10,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    237,
+    371
+   ],
+   "pies": [
+    144.5,
+    353.0
+   ]
+  },
+  "zorro_aterriza": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 18,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    312,
+    376
+   ],
+   "pies": [
+    167.0,
+    363.0
+   ]
+  },
+  "zorro_frenar": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 18,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    270,
+    374
+   ],
+   "pies": [
+    165.5,
+    360.0
+   ]
+  },
+  "zorro_ataque": {
+   "fotogramas": 5,
+   "cols": 5,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    344,
+    376
+   ],
+   "pies": [
+    163.5,
+    363.0
+   ]
+  },
+  "zorro_dash": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 20,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    360,
+    318
+   ],
+   "pies": [
+    180.0,
+    350.5
+   ]
+  },
+  "zorro_dano": {
+   "fotogramas": 3,
+   "cols": 3,
+   "fps": 14,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    258,
+    371
+   ],
+   "pies": [
+    172.5,
+    356.5
+   ]
+  },
+  "zorro_trepar": {
+   "fotogramas": 8,
+   "cols": 8,
+   "fps": 10,
+   "bucle": true,
+   "vista": "perfil",
+   "fotograma": [
+    278,
+    387
+   ],
+   "pies": [
+    162.5,
+    358.5
+   ]
+  },
+  "transformar": {
+   "fotogramas": 36,
+   "cols": 8,
+   "fps": 30,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    360,
+    400
+   ],
+   "pies": [
+    180.0,
+    384.0
+   ]
+  },
+  "transformar_fx": {
+   "fotogramas": 36,
+   "cols": 8,
+   "fps": 30,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    360,
+    374
+   ],
+   "pies": [
+    180.0,
+    379.0
+   ]
+  },
+  "empuje": {
+   "fotogramas": 12,
+   "cols": 8,
+   "fps": 20,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    276,
+    393
+   ],
+   "pies": [
+    113.5,
+    370.5
+   ]
+  },
+  "flotar_entra": {
+   "fotogramas": 8,
+   "cols": 8,
+   "fps": 12,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    237,
+    390
+   ],
+   "pies": [
+    105.0,
+    370.5
+   ]
+  },
+  "remate": {
+   "fotogramas": 7,
+   "cols": 7,
+   "fps": 24,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    360,
+    406
+   ],
+   "pies": [
+    180.0,
+    366.0
+   ]
+  },
+  "valla": {
+   "fotogramas": 6,
+   "cols": 6,
+   "fps": 16,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    307,
+    390
+   ],
+   "pies": [
+    117.86,
+    367.0
+   ]
+  },
+  "encaramarse": {
+   "fotogramas": 7,
+   "cols": 7,
+   "fps": 22,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    290,
+    401
+   ],
+   "pies": [
+    99.04,
+    362.0
+   ]
+  },
+  "voltereta": {
+   "fotogramas": 4,
+   "cols": 4,
+   "fps": 10,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    358,
+    404
+   ],
+   "pies": [
+    92.54,
+    363.5
+   ]
+  },
+  "tropiezo": {
+   "fotogramas": 30,
+   "cols": 8,
+   "fps": 12,
+   "bucle": false,
+   "vista": "perfil",
+   "fotograma": [
+    422,
+    418
+   ],
+   "pies": [
+    93.44,
+    378.0
+   ]
+  }
+ },
+ "intro_encaje": {
+  "pxm": 212.388,
+  "x": 499.21,
+  "y": 632.73
+ }
+}

@@ -12,6 +12,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { B } from './datos.js';
+import { crearArbustos } from './arbustos.js';
+import { crearHojasCopa } from './copas.js';
 
 export const CAPA_BOSQUE = 3;
 const col = (h) => new THREE.Color(h);
@@ -87,7 +89,7 @@ function rama(a, b, r) {
 }
 // un bulto de copa: icosaedro abollado y aplastado; las normales salen de su centro (sombreado de bola, como las copas
 // pintadas) y el color baja a oscuro por debajo y se aclara arriba
-function bulto(rr, cx, cy, cz, r, aplast = 0.78, tono = 0) {
+function bulto(rr, cx, cy, cz, r, aplast = 0.78, tono = 0, masa = false) {
   let g = limpiar(new THREE.IcosahedronGeometry(r, 1));
   const p = g.attributes.position, n = g.attributes.normal, s = rr() * 50;
   for (let i = 0; i < p.count; i++) {
@@ -100,12 +102,14 @@ function bulto(rr, cx, cy, cz, r, aplast = 0.78, tono = 0) {
   marcar(g, 0, 0, 0);
   return pintar(g, (c, x, y, z, nx, ny) => {
     c.copy(base).lerp(HOJA[0], lisa(0.2, -0.8, ny) * 0.7).lerp(HOJA_LUZ, lisa(0.45, 1, ny) * 0.35 * (0.6 + ruido3(x * 3, y * 3, z * 3)));
+    if (masa) c.multiplyScalar(0.72);          // la masa de dentro de una copa: hojas en sombra, solo tapa el cielo
   });
 }
 
-// un ARBOL entero en su sitio (0,0,0 en el pie): { geo, tinta, rb }
+// un ARBOL entero en su sitio (0,0,0 en el pie): { geo, tinta, rb, alto, copa }
+const MASA_COPA = 0.45;          // la masa de cada bulto de copa, a esta parte de su radio; las hojas van en el radio entero
 export function geoArbol(semilla, alto, rb) {
-  const rr = azar(semilla), partes = [], tintas = [];
+  const rr = azar(semilla), partes = [], tintas = [], copa = [];      // copa: los bultos, para ponerles hojas (copas.js)
   const curva = (rr() - 0.5) * rb * 1.6, ht = alto * (0.7 + rr() * 0.08);
   const T = tronco(rr, ht, rb, curva);
   partes.push(T); tintas.push(casco(T, 0.035 + rb * 0.04));
@@ -118,28 +122,21 @@ export function geoArbol(semilla, alto, rb) {
     const R = rama(new THREE.Vector3(x0, y, 0), b, rb * 0.2);
     partes.push(R); tintas.push(casco(R, 0.02));
     for (let q = 0; q < 2 + Math.floor(rr() * 2); q++) {
-      const C = bulto(rr, b.x + (rr() - 0.5) * rc * 0.5, b.y + rr() * rc * 0.3, b.z + (rr() - 0.5) * rc * 0.5, rc * (0.24 + rr() * 0.14), 0.72, q % 2);
-      partes.push(C); tintas.push(casco(C, 0.045));
+      const bx = b.x + (rr() - 0.5) * rc * 0.5, by = b.y + rr() * rc * 0.3, bz = b.z + (rr() - 0.5) * rc * 0.5, r = rc * (0.24 + rr() * 0.14);
+      // en las puntas de rama, solo hojas (copas.js): son los bultos bajos, los que pasan cerca de la camara, y su masa
+      // vista desde debajo era una bola negra; la masa queda para la copa de arriba, la que tapa el cielo
+      copa.push({ x: bx, y: by, z: bz, r, ap: 0.72 });
     }
   }
   // la copa: muchos bultos pequenos arriba (se lee como hojas, no como piedras)
   const n = 14 + Math.floor(rr() * 7);
   for (let k = 0; k < n; k++) {
     const a = rr() * 6.28, d = rc * 1.25 * Math.sqrt(rr()), y = ht + rc * (-0.45 + rr() * 1.05);
-    const C = bulto(rr, topX + Math.cos(a) * d, y, Math.sin(a) * d, rc * (0.34 + rr() * 0.24), 0.74 + rr() * 0.12, k % 2);
-    partes.push(C); tintas.push(casco(C, 0.05));
+    const r = rc * (0.34 + rr() * 0.24), ap = 0.74 + rr() * 0.12;
+    const C = bulto(rr, topX + Math.cos(a) * d, y, Math.sin(a) * d, r * MASA_COPA, ap, k % 2, true);
+    partes.push(C); copa.push({ x: topX + Math.cos(a) * d, y, z: Math.sin(a) * d, r, ap });
   }
-  return { geo: mergeGeometries(partes), tinta: mergeGeometries(tintas), rb, alto };
-}
-// una MATA: tres o cuatro bultos bajos
-function geoMata(semilla, r) {
-  const rr = azar(semilla), partes = [], tintas = [];
-  for (let k = 0; k < 8 + Math.floor(rr() * 5); k++) {
-    const a = rr() * 6.28, d = r * 0.75 * Math.sqrt(rr()), rk = r * (0.22 + rr() * 0.2);
-    const C = bulto(rr, Math.cos(a) * d, rk * 0.5 + rr() * r * 0.45 * (1 - d / r), Math.sin(a) * d, rk, 0.75, 1);
-    partes.push(C); tintas.push(casco(C, 0.02));
-  }
-  return { geo: mergeGeometries(partes), tinta: mergeGeometries(tintas) };
+  return { geo: mergeGeometries(partes), tinta: mergeGeometries(tintas), rb, alto, copa };
 }
 // un HELECHO: hojas largas que salen del centro y se arquean (dos caras)
 function geoHelecho(semilla, l) {
@@ -242,13 +239,18 @@ export function crearBosque3D(escena, { suelo, M, escaparse = [], estorba = () =
     arboles.push({ x, z, brota: false, lado: 'dentro' });
     n++;
   }
+  const troncos = [], bultosCopa = [];
   for (const a of arboles) {
     const cerca = Math.abs(a.x - CX) < 9;
     const fino = cerca || a.brota;      // los que se ven desde el lateral, como los troncos pintados
     const altoA = a.alto || (cerca ? 13 : 15) + rr() * (cerca ? 5 : 8), rb = a.rb || (fino ? 0.2 + rr() * 0.2 : 0.3 + rr() * 0.35);
-    const { geo, tinta: gt } = geoArbol(Math.floor(rr() * 1e9), altoA, rb);
+    const { geo, tinta: gt, copa } = geoArbol(Math.floor(rr() * 1e9), altoA, rb);
     const y = alto(a.x, a.z) - 0.05, giro = rr() * 6.28;
     choques.push({ x: a.x, z: a.z, r: rb * 1.05 });
+    troncos.push({ x: a.x, z: a.z, rb });
+    // los bultos de la copa en el mundo (el mismo giro que colocar(): rotateY)
+    const cg = Math.cos(giro), sg = Math.sin(giro);
+    for (const b of copa) bultosCopa.push({ x: a.x + b.x * cg + b.z * sg, y: y + b.y, z: a.z - b.x * sg + b.z * cg, r: b.r, ap: b.ap });
     if (a.brota) {
       const o = new THREE.Group(); o.position.set(a.x, y, a.z); o.rotation.y = giro;
       const m = new THREE.Mesh(geo, toon); m.castShadow = true; m.receiveShadow = true;
@@ -261,9 +263,20 @@ export function crearBosque3D(escena, { suelo, M, escaparse = [], estorba = () =
       L.geo.push(colocar(geo, a.x, y, a.z, giro)); L.tinta.push(colocar(gt, a.x, y, a.z, giro));
     }
   }
-  // ---- matas, helechos y setas que brillan: alrededor del camino y al pie de los arboles
+  const hojasCopa = crearHojasCopa(grupo, bultosCopa, { gradiente, enCapa, pal: HOJA, luz: HOJA_LUZ, rr });
+  // LA HUELLA DE LOS TRONCOS (pedido 2026-10-23: «algunas plantas estan pegadas a los arboles: quitalas o que sus hojas no
+  // traspasen los troncos»): el pie del tronco se abre en raices hasta ~2,1 veces su radio (tronco()), asi que una planta
+  // de radio r no va a menos de 2,1 rb + 0,85 r del eje; la hierba, no dentro del pie. En una rejilla de 4 m
+  const rejilla = new Map(), celda = (x, z) => `${Math.floor(x / 4)},${Math.floor(z / 4)}`;
+  for (const t of troncos) { const k = celda(t.x, t.z); if (!rejilla.has(k)) rejilla.set(k, []); rejilla.get(k).push(t); }
+  const pisaTronco = (x, z, r, pie = 2.1) => {
+    const cx = Math.floor(x / 4), cz = Math.floor(z / 4);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const t of rejilla.get(`${cx + i},${cz + j}`) || []) if (Math.hypot(x - t.x, z - t.z) < pie * t.rb + r) return true;
+    return false;
+  };
+  // ---- arbustos, helechos y setas que brillan: alrededor del camino y al pie de los arboles
   const helechoGeo = [geoHelecho(11, 0.75), geoHelecho(23, 0.95), geoHelecho(37, 0.6)];
-  const setas = [];
+  const setas = [], arbustosSitios = [];
   for (let n = 0, intentos = 0; n < 1000 && intentos < 30000; intentos++) {
     const x = CX + (rr() < 0.5 ? -1 : 1) * (0.9 + rr() * rr() * 30), z = B.DELANTE0 + 4 + rr() * (B.BOSQUE1 - B.DELANTE0 - 4);
     if (Math.abs(x - CX) < 0.85) continue;
@@ -273,10 +286,13 @@ export function crearBosque3D(escena, { suelo, M, escaparse = [], estorba = () =
     const y = alto(x, z), giro = rr() * 6.28, que = rr();
     const vista = seVe(x, z);                                          // se ve desde el lateral: brota
     let o = null, L = vista ? null : lote(z);
-    if (que < 0.45) {
-      const { geo, tinta: gt } = geoMata(Math.floor(rr() * 1e9), 0.45 + rr() * 0.55);
-      if (vista) { o = new THREE.Group(); const m = new THREE.Mesh(geo, toon); m.castShadow = true; o.add(m, new THREE.Mesh(gt, tinta)); }
-      else { L.geo.push(colocar(geo, x, y, z, giro)); L.tinta.push(colocar(gt, x, y, z, giro)); }
+    // ARBUSTOS (2026-10-23): el laurel y el boj de escuela/obras/arbusto, todo hojas, en vez de las matas de bolas; van
+    // instanciados con sus LOD (arbustos.js) y, como miden 1,2-1,8 m de ancho, no a menos de 1,5 m del paso del 18
+    const escala = 0.75 + rr() * 0.4;
+    // la que se metia en un tronco se pone en otro sitio
+    if (pisaTronco(x, z, que < 0.45 ? 0.85 * 0.85 * escala : 0.7)) continue;
+    if (que < 0.45 && Math.abs(x - CX) > 1.5 + 0.85 * escala) {
+      arbustosSitios.push({ x, y: y - 0.02, z, giro, escala, especie: rr() < 0.4 ? 'boj' : 'laurel' });
     } else {
       const g = helechoGeo[Math.floor(rr() * 3)];
       if (vista) { o = new THREE.Group(); o.add(new THREE.Mesh(g, toonDos)); }
@@ -296,6 +312,7 @@ export function crearBosque3D(escena, { suelo, M, escaparse = [], estorba = () =
     }
     n++;
   }
+  const arbustos = crearArbustos(grupo, arbustosSitios, gradiente, enCapa);
   // los lotes: una malla por tramo y material
   const enLotes = [];
   for (const L of lotes.values()) {
@@ -346,6 +363,7 @@ export function crearBosque3D(escena, { suelo, M, escaparse = [], estorba = () =
     for (let i = 0; i < N; i++) {
       // por todas partes, tambien por donde anda el 18; muy junta cerca de el y mas rala lejos (la bruma la tapa)
       const lado = rr() < 0.5 ? -1 : 1, x = CX + lado * Math.pow(rr(), 1.9) * 26, z = B.DELANTE0 + rr() * (B.BOSQUE1 - B.DELANTE0);
+      if (pisaTronco(x, z, 0.04, 1.5)) { i--; continue; }        // no dentro del pie de un tronco
       const enPaso = 1 - lisa(0.4, 1.4, Math.abs(x - CX));
       const sc = (0.75 + Math.pow(rr(), 2) * 0.9) * (1 - 0.35 * enPaso) * (Math.abs(x - CX) > 0.9 && estorba(x, z, 0.1) ? 0.6 : 1);
       c.copy(HOJA[1]).lerp(HOJA_LUZ, rr() * 0.5).multiplyScalar(0.8 + rr() * 0.35);
@@ -492,7 +510,7 @@ export function crearBosque3D(escena, { suelo, M, escaparse = [], estorba = () =
       const e = rebote(k);
       s.obj.scale.set(Math.max(0.001, e * (0.9 + 0.1 * k)), Math.max(0.001, e), Math.max(0.001, e * (0.9 + 0.1 * k)));
     }
-    uViento.value = t;
+    uViento.value = t; hojasCopa.actualizar(t, zh);
     void fase;
     return nuevos;
   }
@@ -509,7 +527,7 @@ export function crearBosque3D(escena, { suelo, M, escaparse = [], estorba = () =
     for (const g of enLotes) g.visible = false;
     haces.visible = false;
   }
-  return { grupo, choques, altura: alto, actualizar, completar, reiniciar, setas, sueltos, info: { arboles: arboles.length, sueltos: sueltos.length, lotes: enLotes.length } };
+  return { grupo, choques, altura: alto, actualizar, completar, reiniciar, setas, sueltos, arbustos, info: { arboles: arboles.length, sueltos: sueltos.length, lotes: enLotes.length, arbustos: arbustos.info, ramilletes: hojasCopa.total, trozosCopa: hojasCopa.trozos, bultos: bultosCopa.length } };
 }
 
 // EL MATERIAL DE LOS ARBOLES: toon de tres escalones con el color por vertice y, encima, lo que en los arboles pintados

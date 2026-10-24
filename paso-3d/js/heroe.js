@@ -2,7 +2,7 @@
 // propio (H.brillo: en el conducto oscuro es lo unico que se ve, como en el 2D), la luz ambiente de fuera (hemisferio) se
 // multiplica por H.exterior (dentro del conducto no le llega) y H.reiniciar() para __dbg.ir().
 //
-// El 18: el .glb de escuela/obras/sujeto18_3d (piel, 51 huesos, 8 clips) con el acabado de tinta del visor
+// El 18: el .glb de escuela/obras/sujeto18_3d (piel, rig de juego, 36 clips) con el acabado de tinta del visor
 // (MeshToonMaterial con el color horneado en dos escalones y el casco de tinta que trae el .glb) y su CONTROL en
 // tercera persona: andar / correr relativos a la camara, salto, gestos, gravedad y choques en planta.
 //
@@ -12,8 +12,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { crearTela } from './tela.js';
 
-const ANDAR = { v: 0.45, escala: 0.45 / 0.27 };
-const CORRER = { v: 1.8, escala: 1.8 / 1.37 };
+// los ciclos del rig de juego (2026-10-23, escuela/obras/sujeto18_3d/salida/clips.json) ya van a la velocidad del juego:
+// andar 0,45 m/s (zancada 0,27 m en 0,6 s) y correr 1,8 m/s (0,63 m en 0,35 s); antes iban a 0,27 y 1,37 y se aceleraban
+const ANDAR = { v: 0.45, escala: 0.45 / 0.45 };
+const CORRER = { v: 1.8, escala: 1.8 / 1.8 };
 const RADIO = 0.24;            // planta del 18 para los choques (la capa abierta mide ~0,5 m)
 const GRAVEDAD = 9.8;
 const SALTO_V = 3.3;           // m/s hacia arriba: ~0,55 m de salto
